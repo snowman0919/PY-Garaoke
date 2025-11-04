@@ -22,7 +22,7 @@ class Card(QFrame):
 class App(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("디미 노래방 · PyDracula Style")
+        self.setWindowTitle("디미 노래방")
         self.resize(1280, 800)
         self.bus = Bus()
         cw = QWidget()
