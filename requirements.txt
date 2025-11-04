@@ -1,0 +1,13 @@
+PySide6
+yt-dlp
+librosa
+numpy
+scipy
+sounddevice
+soundfile
+pydub
+torch
+demucs
+fastapi
+uvicorn
+qt-material

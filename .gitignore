@@ -1,0 +1,6 @@
+venv-mac/
+.venv-mac/
+venv/
+.venv/
+env/
+ENV/
