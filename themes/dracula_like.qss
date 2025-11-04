@@ -1,0 +1,30 @@
+
+* { font-family: 'Pretendard','Inter','Apple SD Gothic Neo',sans-serif; color: #ECECF1; font-size: 13px; }
+QMainWindow, QWidget { background: #0D0F13; }
+#AppBar { background: #0B0C10; border-bottom: 1px solid #1A1D24; }
+#Title { font-size: 16px; font-weight: 700; }
+#Rail { background: #0A0B0E; border-right: 1px solid #141821; }
+#Rail QPushButton { background: transparent; color: #C2C7D1; border-radius: 12px; padding: 10px 12px; }
+#Rail QPushButton:hover { background: rgba(255,255,255,0.05); color: #FFFFFF; }
+#Rail QPushButton:checked { background: #2A6EF4; color: #FFFFFF; }
+#Sidebar { background: #0E1116; border-left: 1px solid #141821; }
+#Tabs { background: transparent; }
+QPushButton[role="tab"] { background: transparent; color: #B7BDC9; padding: 10px 14px; border-radius: 12px; }
+QPushButton[role="tab"]:hover { color: #E6E9EF; background: rgba(255,255,255,0.06); }
+QPushButton[role="tab"]:checked { color: #FFFFFF; background: #2A6EF4; }
+QLineEdit, QComboBox, QSpinBox { background: #12151C; border: 1px solid #232735; border-radius: 12px; padding: 10px; selection-background-color: #2A6EF4; }
+QPushButton { background: #171A22; border: 1px solid #232735; color: #E6E9EF; border-radius: 12px; padding: 10px 14px; }
+QPushButton[variant="accent"] { background: #2A6EF4; border: 0; color: #FFFFFF; }
+QPushButton[variant="ghost"] { background: transparent; border: 0; color: #C8CDD8; }
+QPushButton:disabled { opacity: 0.5; }
+QProgressBar { background: #12151C; border: 1px solid #232735; border-radius: 8px; height: 10px; }
+QProgressBar::chunk { background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #7AA3FF, stop:1 #2A6EF4); border-radius: 8px; }
+QListWidget, QTreeView, QTableView { background: #10131A; border: 1px solid #1D2230; border-radius: 14px; }
+QListWidget::item { padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+QListWidget::item:selected { background: rgba(42,110,244,0.18); color: #FFFFFF; }
+QLabel[role="pill"] { background: #1A2030; border: 1px solid #2A3B57; color: #C3D4FF; padding: 4px 8px; border-radius: 999px; }
+QLabel[role="pill"][tone="pink"] { background: #2A1C2A; border-color: #5A2B6A; color: #FFC4F0; }
+QLabel[role="pill"][tone="green"] { background: #192820; border-color: #2D6A4F; color: #C9FFD7; }
+QWidget[cls="Card"] { background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #12151C, stop:1 #0F1117); border: 1px solid #1C2030; border-radius: 18px; }
+QSlider::groove:horizontal { background: #202638; height: 6px; border-radius: 3px; }
+QSlider::handle:horizontal { background: #FFFFFF; width: 12px; height: 12px; margin: -4px 0; border-radius: 6px; }
