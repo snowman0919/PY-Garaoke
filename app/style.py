@@ -4,9 +4,9 @@ import pathlib
 def load_theme(app, theme_name: str = "dracula_like.qss"):
     base = pathlib.Path(__file__).resolve().parent
     candidates = [
-        base / "themes" / theme_name,          # app/themes
-        base.parent / "themes" / theme_name,   # project-level themes
-        pathlib.Path.cwd() / "themes" / theme_name,  # CWD/themes (fallback)
+        base / "themes" / theme_name,
+        base.parent / "themes" / theme_name,
+        pathlib.Path.cwd() / "themes" / theme_name,
     ]
 
     for p in candidates:
@@ -16,5 +16,4 @@ def load_theme(app, theme_name: str = "dracula_like.qss"):
             app.setFont(QFont("Inter", 11))
             return
 
-    # Fallback: set font only if theme not found
     app.setFont(QFont("Inter", 11))
