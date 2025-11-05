@@ -1,202 +1,135 @@
-from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QStackedWidget, QFrame, QLineEdit, QListWidget, QProgressBar, QSplitter, QSizePolicy
-from PySide6.QtCore import Qt, Signal, QObject
+from PySide6.QtWidgets import (
+    QMainWindow,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QPushButton,
+    QLabel,
+    QFrame,
+    QLineEdit,
+    QListWidget,
+    QSplitter,
+    QSizePolicy,
+)
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
-import sys, pathlib
 
-class Bus(QObject):
-    to_home = Signal()
-    to_sing = Signal()
-    to_result = Signal()
-    to_leader = Signal()
-    download = Signal(str)
-    separate = Signal(str)
-    start_sing = Signal()
-    stop_and_score = Signal()
-
-class Card(QFrame):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setProperty("cls", "Card")
-        self.setFrameShape(QFrame.StyledPanel)
 
 class App(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("디미 노래방")
         self.resize(1280, 800)
-        self.bus = Bus()
+
         cw = QWidget()
         root = QVBoxLayout(cw)
-        root.setContentsMargins(0,0,0,0)
+        root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
         appbar = QWidget()
         appbar.setObjectName("AppBar")
+        appbar.setStyleSheet(
+            "#AppBar{background:qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #2d2f55, stop:1 #1d203b);}"
+        )
         hb = QHBoxLayout(appbar)
-        hb.setContentsMargins(16,10,16,10)
-        self.title = QLabel("디미 노래방")
-        self.title.setObjectName("Title")
+        hb.setContentsMargins(16, 10, 16, 10)
+        hb.setSpacing(10)
+
+        # Left: logo mark
+        self.logo = QLabel("@")
+        self.logo.setStyleSheet(
+            "color:#ff5ac8; font-weight:800; font-size:20px; background: transparent;"
+        )
+
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("검색")
+        self.search.setFixedWidth(260)
+        self.search.setClearButtonEnabled(True)
+
+        # self.btn_search = QPushButton("🔍")
+        # self.btn_search.setFixedSize(32, 32)
+        # self.btn_search.setProperty("variant", "ghost")
+
+        self.btn_add = QPushButton("+")
+        self.btn_add.setFixedSize(32, 32)
+        self.btn_add.setProperty("variant", "accent")
+
         spacer = QWidget()
+        spacer.setObjectName("AppBarSpacer")
         spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        self.btn_user = QPushButton("티라노 · 1164원")
-        self.btn_user.setProperty("variant","ghost")
-        hb.addWidget(self.title)
+        spacer.setStyleSheet("background: transparent; border: 0;")
+
+        self.btn_profile = QPushButton()
+        self.btn_profile.setFixedSize(28, 28)
+        self.btn_profile.setStyleSheet(
+            "border-radius:14px; background:#c9cbd3; border:0;"
+        )
+
+        hb.addWidget(self.logo)
+        hb.addSpacing(8)
+        hb.addWidget(self.search)
+        # hb.addWidget(self.btn_search)
+        hb.addWidget(self.btn_add)
         hb.addWidget(spacer)
-        hb.addWidget(self.btn_user)
+        hb.addWidget(self.btn_profile)
 
         content = QSplitter()
         content.setChildrenCollapsible(False)
         content.setHandleWidth(1)
 
-        rail = QWidget()
-        rail.setObjectName("Rail")
-        rv = QVBoxLayout(rail)
-        rv.setContentsMargins(12,12,12,12)
-        rv.setSpacing(8)
-        self.btn_home = QPushButton("홈")
-        self.btn_menu = QPushButton("≡")
-        self.btn_search = QPushButton("검색")
-        for b in [self.btn_home, self.btn_menu, self.btn_search]:
-            b.setCheckable(True)
-            b.setProperty("role","rail")
-            b.setMinimumHeight(44)
-            rv.addWidget(b)
-        rv.addStretch(1)
+        left = QWidget()
+        left.setObjectName("LeftPanel")
+        lv = QVBoxLayout(left)
+        lv.setContentsMargins(0, 0, 0, 0)
+        lv.setSpacing(0)
 
-        right_panel = QWidget()
-        rp = QHBoxLayout(right_panel)
-        rp.setContentsMargins(0,0,0,0)
-        rp.setSpacing(0)
+        left_head = QWidget()
+        lh = QHBoxLayout(left_head)
+        lh.setContentsMargins(16, 12, 16, 12)
+        lh.setSpacing(8)
+        title = QLabel("노래 목록")
+        title.setStyleSheet("font-size:18px; font-weight:700;")
+        lh.addWidget(title)
+
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setFrameShadow(QFrame.Sunken)
+
+        self.list_songs = QListWidget()
+        self.list_songs.setMinimumWidth(280)
+        self.list_songs.setAlternatingRowColors(True)
+
+        lv.addWidget(left_head)
+        lv.addWidget(line)
+        lv.addWidget(self.list_songs, 1)
 
         center = QWidget()
         cv = QVBoxLayout(center)
-        cv.setContentsMargins(16,16,16,16)
-        cv.setSpacing(16)
-
-        tabs = QWidget()
-        tabs.setObjectName("Tabs")
-        th = QHBoxLayout(tabs)
-        th.setContentsMargins(16,0,16,0)
-        th.setSpacing(8)
-        self.tab_pop = QPushButton("인기차트")
-        self.tab_new = QPushButton("최신곡")
-        self.tab_ai = QPushButton("AI 추천")
-        self.tab_theme = QPushButton("TJ 테마")
-        for t in [self.tab_pop, self.tab_new, self.tab_ai, self.tab_theme]:
-            t.setCheckable(True)
-            t.setAutoExclusive(True)
-            t.setProperty("role","tab")
-            th.addWidget(t)
-        th.addStretch(1)
-
-        self.stack = QStackedWidget()
-        self.page_home = QWidget()
-        self.page_sing = QWidget()
-        self.page_result = QWidget()
-        self.page_leader = QWidget()
-        self.stack.addWidget(self.page_home)
-        self.stack.addWidget(self.page_sing)
-        self.stack.addWidget(self.page_result)
-        self.stack.addWidget(self.page_leader)
-
-        cv.addWidget(tabs)
-        cv.addWidget(self.stack)
-
-        sidebar = QWidget()
-        sidebar.setObjectName("Sidebar")
-        sv = QVBoxLayout(sidebar)
-        sv.setContentsMargins(16,16,16,16)
-        sv.setSpacing(12)
-        self.pill_now = QLabel("현재곡")
-        self.pill_now.setProperty("role","pill")
-        self.pill_now.setProperty("tone","pink")
-        self.toggle_auto = QPushButton("자동채점 ON")
-        self.toggle_auto.setCheckable(True)
-        self.toggle_auto.setChecked(True)
-        self.toggle_auto.setProperty("variant","accent")
-        self.queue = QListWidget()
-        self.queue.setMinimumWidth(340)
-        self.queue.setMaximumWidth(420)
-        self.btn_clear = QPushButton("예약곡 전체 삭제")
-        sv.addWidget(self.pill_now)
-        sv.addWidget(self.toggle_auto)
-        sv.addWidget(self.queue,1)
-        sv.addWidget(self.btn_clear)
-
-        rp.addWidget(center,1)
-        rp.addWidget(sidebar)
-        content.addWidget(rail)
-        content.addWidget(right_panel)
-        content.setStretchFactor(0,0)
-        content.setStretchFactor(1,1)
-
-        root.addWidget(appbar)
-        root.addWidget(content,1)
-        self.setCentralWidget(cw)
-
-        self._init_pages()
-        self._wire()
-
-    def _init_pages(self):
-        hv = QVBoxLayout(self.page_home)
-        card = Card()
-        c = QVBoxLayout(card)
-        head = QLabel("님 오늘은 이 노래 어때요?")
-        sub = QLabel("최근 부른 노래에서 추천")
-        sub.setProperty("role","muted")
-        c.addWidget(head)
-        c.addWidget(sub)
-        row = QHBoxLayout()
-        self.home_query = QLineEdit()
-        self.home_query.setPlaceholderText("유튜브 URL 또는 제목")
-        self.home_dl = QPushButton("다운로드")
-        self.home_dl.setProperty("variant","accent")
-        self.home_sep = QPushButton("MR/SR 분리")
-        row.addWidget(self.home_query,1)
-        row.addWidget(self.home_dl)
-        row.addWidget(self.home_sep)
-        c.addLayout(row)
-        hv.addWidget(card)
-
-        sv = QVBoxLayout(self.page_sing)
-        player = Card()
-        pv = QVBoxLayout(player)
-        self.lyrics = QLabel("널 정말 사랑해")
+        cv.setContentsMargins(0, 0, 0, 0)
+        cv.setSpacing(0)
+        self.lyrics = QLabel("가사")
         self.lyrics.setAlignment(Qt.AlignCenter)
         self.lyrics.setStyleSheet("font-size:22px; font-weight:700;")
-        self.progress = QProgressBar()
-        ctr = QHBoxLayout()
-        self.btn_start = QPushButton("시작")
-        self.btn_stop = QPushButton("종료 및 채점")
-        ctr.addWidget(self.btn_start)
-        ctr.addWidget(self.btn_stop)
-        pv.addWidget(self.lyrics)
-        pv.addWidget(self.progress)
-        pv.addLayout(ctr)
-        sv.addWidget(player)
+        cv.addWidget(self.lyrics, 1)
 
-        rv = QVBoxLayout(self.page_result)
-        rcard = Card()
-        rcv = QVBoxLayout(rcard)
-        self.label_score = QLabel("점수: -")
-        self.label_feedback = QLabel("피드백: -")
-        self.btn_show_leader = QPushButton("랭킹 보기")
-        rcv.addWidget(self.label_score)
-        rcv.addWidget(self.label_feedback)
-        rcv.addWidget(self.btn_show_leader, alignment=Qt.AlignLeft)
-        rv.addWidget(rcard)
+        content.addWidget(left)
+        content.addWidget(center)
+        content.setStretchFactor(0, 0)
+        content.setStretchFactor(1, 1)
 
-        lv = QVBoxLayout(self.page_leader)
-        lcard = Card()
-        lcv = QVBoxLayout(lcard)
-        self.list_leader = QListWidget()
-        lcv.addWidget(QLabel("로컬 랭킹"))
-        lcv.addWidget(self.list_leader)
-        lv.addWidget(lcard)
+        root.addWidget(appbar)
+        root.addWidget(content, 1)
+        self.setCentralWidget(cw)
 
-    def _wire(self):
-        self.btn_home.clicked.connect(lambda: self.stack.setCurrentWidget(self.page_home))
-        self.tab_ai.setChecked(True)
-        self.home_dl.clicked.connect(lambda: self.queue.addItem(self.home_query.text()))
-        self.btn_start.clicked.connect(lambda: self.stack.setCurrentWidget(self.page_sing))
-        self.btn_stop.clicked.connect(lambda: self.stack.setCurrentWidget(self.page_result))
+        self.btn_search.clicked.connect(self._do_search)
+        self.btn_add.clicked.connect(self._add_current_to_list)
+
+    def _do_search(self):
+        q = self.search.text().strip()
+        if q:
+            self.lyrics.setText(f"검색: {q}")
+
+    def _add_current_to_list(self):
+        q = self.search.text().strip()
+        if q:
+            self.list_songs.addItem(q)
