@@ -145,20 +145,28 @@ class Controller(QObject):
                     'preferredcodec': 'wav',
                     'preferredquality': '192',
                 }],
-                'outtmpl': os.path.join(output_dir, song_id),
-                'quiet': True,
-                'no_warnings': True,
+                'outtmpl': os.path.join(output_dir, f"{song_id}.%(ext)s"),
+                'quiet': False, # Enable logging for debug
+                'no_warnings': False,
+                'noplaylist': True,
+                'default_search': 'ytsearch',
+                # Let yt-dlp pick a working client (android sdkless / web_safari) instead of forcing one
+                # 'extractor_args': {'youtube': {'player_client': ['default']}},
+                # 'username': 'oauth2', 
+                # 'password': '',
             }
 
             # If input is not a URL, assume it's a search query
             if not url_or_query.startswith(("http://", "https://")):
-                url_or_query = f"ytsearch:{url_or_query}"
+                url_or_query = f"ytsearch1:{url_or_query}"
 
             self.song_download_progress_signal.emit("Starting download...")
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info_dict = ydl.extract_info(url_or_query, download=True)
                 # If a search query was used, info_dict will contain results for the first video
                 if 'entries' in info_dict:
+                    if not info_dict['entries']:
+                         raise Exception("No search results found.")
                     info_dict = info_dict['entries'][0]
 
                 title = info_dict.get('title', 'Unknown Title')
@@ -168,21 +176,35 @@ class Controller(QObject):
 
             # Ensure the downloaded file is named correctly as WAV
             downloaded_file = os.path.join(output_dir, f"{song_id}.wav")
+            
+            # Cleanup: Remove any .mhtml files that might have been downloaded due to client errors
+            for f in os.listdir(output_dir):
+                if f.startswith(song_id) and f.endswith(".mhtml"):
+                    try:
+                        os.remove(os.path.join(output_dir, f))
+                    except OSError:
+                        pass
+
             if not os.path.exists(downloaded_file):
                 # Search for any file starting with song_id
                 files_in_output = os.listdir(output_dir)
                 possible_files = [f for f in files_in_output if f.startswith(song_id)]
                 
+                # Filter out non-audio files (like .mhtml which yt-dlp might produce on some errors/captchas)
+                valid_audio_exts = {'.wav', '.mp3', '.flac', '.m4a', '.webm', '.ogg', '.opus', '.aac', '.wma', '.mp4'}
+                audio_candidates = [f for f in possible_files if os.path.splitext(f)[1].lower() in valid_audio_exts]
+                
                 found = False
-                if possible_files:
+                last_conv_error = None
+                if audio_candidates:
                     # Prioritize .wav files
-                    wav_files = [f for f in possible_files if f.endswith('.wav')]
+                    wav_files = [f for f in audio_candidates if f.endswith('.wav')]
                     if wav_files:
                         os.rename(os.path.join(output_dir, wav_files[0]), downloaded_file)
                         found = True
                     else:
                         # Try to convert whatever we found (e.g. .webm, .m4a, or no extension)
-                        source_file = os.path.join(output_dir, possible_files[0])
+                        source_file = os.path.join(output_dir, audio_candidates[0])
                         try:
                             # AudioSegment.from_file handles various formats
                             audio = AudioSegment.from_file(source_file)
@@ -190,9 +212,13 @@ class Controller(QObject):
                             found = True
                         except Exception as conv_err:
                             print(f"Failed to convert {source_file} to wav: {conv_err}")
+                            last_conv_error = conv_err
                 
                 if not found:
-                    raise FileNotFoundError(f"Downloaded WAV file not found for {song_id}. Output dir contains: {files_in_output}")
+                    error_msg = f"Downloaded WAV file not found for {song_id}. Output dir contains: {files_in_output}"
+                    if last_conv_error:
+                        error_msg += f". Last conversion error: {last_conv_error}"
+                    raise FileNotFoundError(error_msg)
 
             self.song_download_progress_signal.emit(f"Downloaded: {title} by {artist}")
 
@@ -455,4 +481,3 @@ class Controller(QObject):
         except requests.exceptions.RequestException as e:
             self.show_error_signal.emit(f"Error interacting with ranking server: {e}")
         return global_rankings
-

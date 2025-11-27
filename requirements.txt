@@ -1,5 +1,5 @@
 PySide6==6.6.1
-yt-dlp==2023.11.16
+yt-dlp>=2025.01.01
 demucs-infer==4.1.0
 torch==2.1.0 # Keep existing version
 torchaudio==2.1.0 # Keep existing version

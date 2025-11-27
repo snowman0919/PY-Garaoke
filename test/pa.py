@@ -160,9 +160,9 @@ def relaunch_as_admin_windows():
 
 
 if __name__ == "__main__":
-    if platform.system() == "Windows" and not is_admin_windows():
-        relaunch_as_admin_windows()
-        sys.exit(0)
+    # if platform.system() == "Windows" and not is_admin_windows():
+    #     relaunch_as_admin_windows()
+    #     sys.exit(0)
 
     if has_internet():
         try:

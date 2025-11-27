@@ -118,7 +118,7 @@ class SongListWidget(QWidget):
 
             sing_button = QPushButton("Sing")
             sing_button.setProperty("song_id", song.get("id"))
-            sing_button.clicked.connect(lambda checked, s_id=song.get("id"): self.start_singing_requested.emit(s_id))
+            sing_button.clicked.connect(lambda checked=False, s_id=song.get("id"): self.start_singing_requested.emit(s_id))
             self.song_table.setCellWidget(i, 3, sing_button)
 
 class SingingWidget(QWidget):
