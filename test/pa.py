@@ -6,6 +6,7 @@ import subprocess
 import socket
 
 
+
 REPO_LINK = "https://github.com/snowman0919/PY-Garaoke.git"
 REPO_DIR = "PY-Garaoke"
 
@@ -97,6 +98,11 @@ def main():
         print("[오류] 가상환경 파이썬 실행 파일을 찾을 수 없습니다.")
         print("경로:", venv_python)
         sys.exit(1)
+
+    run_step(
+        "패키지 관리자 설치 및 업데이트",
+        [venv_python, "-m", "pip", "install", "--upgrade", "pip"],
+    )
 
     run_step(
         "프로그램 실행을 위한 필수 패키지 설치",
