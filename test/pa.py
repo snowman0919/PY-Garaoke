@@ -5,8 +5,6 @@ import time
 import subprocess
 import socket
 
-
-
 REPO_LINK = "https://github.com/snowman0919/PY-Garaoke.git"
 REPO_DIR = "PY-Garaoke"
 
@@ -109,9 +107,20 @@ def main():
         [venv_python, "-m", "pip", "install", "-r", "requirements.txt"],
     )
 
+    if platform.system() == "Windows":
+        run_step(
+            "프로그램 실행을 위한 필수 확장 프로그램 설치",
+            ["powershell", "-ExecutionPolicy", "Bypass", "-File", "ffmpeg-win.ps1"],
+        )
+    else:
+        run_step(
+            "프로그램 실행을 위한 필수 프로그램 설치",
+            ["brew", "install", "ffmpeg"],
+        )
+
     print()
     print("모든 준비가 완료되었습니다.")
-    print("프로그램을 실행합니다...")
+    print("곧 프로그램을 자동으로 실행합니다...")
 
     subprocess.run([venv_python, "app.py"])
 
@@ -124,7 +133,37 @@ def has_internet(host="github.com", port=443, timeout=3):
         return False
 
 
+def is_admin_windows():
+    if platform.system() != "Windows":
+        return False
+    import ctypes
+    try:
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except Exception:
+        return False
+
+
+def relaunch_as_admin_windows():
+    import ctypes
+    if platform.system() != "Windows":
+        return
+    exe = sys.executable
+    params = " ".join(f'"{arg}"' for arg in sys.argv)
+    ctypes.windll.shell32.ShellExecuteW(
+        None,
+        "runas",
+        exe,
+        params,
+        None,
+        1
+    )
+
+
 if __name__ == "__main__":
+    if platform.system() == "Windows" and not is_admin_windows():
+        relaunch_as_admin_windows()
+        sys.exit(0)
+
     if has_internet():
         try:
             main()

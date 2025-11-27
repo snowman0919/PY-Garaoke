@@ -169,12 +169,30 @@ class Controller(QObject):
             # Ensure the downloaded file is named correctly as WAV
             downloaded_file = os.path.join(output_dir, f"{song_id}.wav")
             if not os.path.exists(downloaded_file):
-                # yt-dlp might output to song_id.f123.wav then convert. Find it.
-                possible_files = [f for f in os.listdir(output_dir) if f.startswith(song_id) and f.endswith('.wav')]
+                # Search for any file starting with song_id
+                files_in_output = os.listdir(output_dir)
+                possible_files = [f for f in files_in_output if f.startswith(song_id)]
+                
+                found = False
                 if possible_files:
-                    os.rename(os.path.join(output_dir, possible_files[0]), downloaded_file)
-                else:
-                    raise FileNotFoundError(f"Downloaded WAV file not found for {song_id}")
+                    # Prioritize .wav files
+                    wav_files = [f for f in possible_files if f.endswith('.wav')]
+                    if wav_files:
+                        os.rename(os.path.join(output_dir, wav_files[0]), downloaded_file)
+                        found = True
+                    else:
+                        # Try to convert whatever we found (e.g. .webm, .m4a, or no extension)
+                        source_file = os.path.join(output_dir, possible_files[0])
+                        try:
+                            # AudioSegment.from_file handles various formats
+                            audio = AudioSegment.from_file(source_file)
+                            audio.export(downloaded_file, format="wav")
+                            found = True
+                        except Exception as conv_err:
+                            print(f"Failed to convert {source_file} to wav: {conv_err}")
+                
+                if not found:
+                    raise FileNotFoundError(f"Downloaded WAV file not found for {song_id}. Output dir contains: {files_in_output}")
 
             self.song_download_progress_signal.emit(f"Downloaded: {title} by {artist}")
 
