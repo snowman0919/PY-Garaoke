@@ -3,13 +3,16 @@ import uuid
 import json
 import requests
 import asyncio
+import time
+from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 
+import numpy as np
 import yt_dlp
 from pydub import AudioSegment
 
 from PySide6.QtCore import QObject, Signal, QTimer, QThread
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 from app.storage import StorageManager
 from app.audio import AudioPlayer, AudioRecorder, RealtimePitchDetector
@@ -117,6 +120,10 @@ class Controller(QObject):
         self.show_message_signal.emit(f"Nickname set to: {nickname}")
         self.main_window.show_song_list() # Ensure we are on song list after nickname setup
 
+    def update_song_list(self, song_id=None):
+        self.all_songs = self.storage.load_songs()
+        self.update_song_list_signal.emit(self.all_songs)
+
     def show_add_song_dialog(self):
         self.main_window.add_song_dialog.open()
 
@@ -141,8 +148,11 @@ class Controller(QObject):
                 'outtmpl': os.path.join(output_dir, song_id),
                 'quiet': True,
                 'no_warnings': True,
-                'force_generic_extractor': True, # Important for non-URL queries
             }
+
+            # If input is not a URL, assume it's a search query
+            if not url_or_query.startswith(("http://", "https://")):
+                url_or_query = f"ytsearch:{url_or_query}"
 
             self.song_download_progress_signal.emit("Starting download...")
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:

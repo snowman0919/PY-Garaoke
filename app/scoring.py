@@ -90,7 +90,8 @@ class KaraokeScorer:
         ref_f0_clean = ref_f0[~np.isnan(ref_f0) & (ref_f0 > 0)]
         user_f0_clean = user_f0[~np.isnan(user_f0) & (user_f0 > 0)]
 
-        if len(ref_f0_clean) < self.sr * min_duration_sec or len(user_f0_clean) < self.sr * min_duration_sec:
+        min_frames = int(self.sr * min_duration_sec / self.hop_length)
+        if len(ref_f0_clean) < min_frames or len(user_f0_clean) < min_frames:
             return 0.0 # Not enough audio to analyze vibrato
 
         # Basic vibrato proxy: standard deviation of pitch within sustained segments

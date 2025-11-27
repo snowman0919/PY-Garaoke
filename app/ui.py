@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QPainter, QBrush, QColor, QFontMetrics, QFont
 import numpy as np
+import librosa
 
 class NicknameDialog(QDialog):
     nickname_set = Signal(str)
@@ -357,6 +358,7 @@ class MainWindow(QMainWindow):
         self.song_list_widget = SongListWidget()
         self.singing_widget = SingingWidget()
         self.results_widget = ResultsWidget()
+        self.add_song_dialog = AddSongDialog(self)
 
         self.stacked_widget.addWidget(self.song_list_widget) # Index 0
         self.stacked_widget.addWidget(self.singing_widget)   # Index 1
