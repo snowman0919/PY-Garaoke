@@ -1,6 +1,6 @@
 PySide6==6.6.1
 yt-dlp==2023.11.16
-demucs-infer==1.0.0 # Or the latest stable version
+demucs-infer==4.1.0
 torch==2.1.0 # Keep existing version
 torchaudio==2.1.0 # Keep existing version
 sounddevice==0.4.6
@@ -64,5 +64,3 @@ exceptiongroup==1.2.0 # Required by uvicorn
 pydantic==2.5.2 # Required by fastapi
 pydantic_core==2.14.5 # Required by fastapi
 anyio==4.0.0 # Required by fastapi
-# Need to include platform specific requirements for PyAudio if used instead of sounddevice, but sticking with sounddevice
-# Also, need to verify that demucs and torchaudio versions are compatible and can be installed via pip on both platforms.
