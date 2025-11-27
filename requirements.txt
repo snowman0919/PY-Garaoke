@@ -18,7 +18,7 @@ typing_extensions==4.9.0 # Required by fastapi
 mutagen==1.47.0 # Required by pydub
 packaging==23.2 # Required by demucs
 omegaconf==2.3.0 # Required by demucs
-auralib==0.1.0 # Optional, but good for audio utility
+auralib==0.0.4
 future==0.18.3 # Required by pydub
 colorama==0.4.6 # Required by youtube-dl
 tqdm==4.66.1 # Required by youtube-dl
