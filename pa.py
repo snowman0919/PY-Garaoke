@@ -5,9 +5,13 @@ import time
 import subprocess
 import socket
 import glob
+import shutil
+import zipfile
+import urllib.request
 
 REPO_LINK = "https://github.com/snowman0919/PY-Garaoke/archive/refs/heads/main.zip"
-REPO_DIR = "PY-Garaoke"
+PROJECT_PREFIX = "PY-Garaoke"
+ZIP_NAME = "PY-Garaoke.zip"
 
 
 def clear_terminal():
@@ -66,8 +70,8 @@ def get_venv_python():
     else:
         return os.path.join("venv", "bin", "python")
 
+
 def add_ffmpeg_to_path_windows():
-    """Windows 환경에서 ffmpeg 경로를 찾아 현재 프로세스의 환경변수에 추가"""
     user_profile = os.environ.get("USERPROFILE")
     if not user_profile:
         return
@@ -86,6 +90,149 @@ def add_ffmpeg_to_path_windows():
             return
 
 
+def has_internet(host="github.com", port=443, timeout=3):
+    try:
+        socket.create_connection((host, port), timeout)
+        return True
+    except OSError:
+        return False
+
+
+def is_admin_windows():
+    import ctypes
+    try:
+        return ctypes.windll.shell32.IsUserAnAdmin()
+    except:
+        return False
+
+
+def relaunch_as_admin_windows():
+    import ctypes
+
+    if getattr(sys, "frozen", False):
+        exe = sys.executable
+        params = " ".join(f'"{arg}"' for arg in sys.argv[1:])
+        ret = ctypes.windll.shell32.ShellExecuteW(
+            None,
+            "runas",
+            exe,
+            params,
+            None,
+            1
+        )
+    else:
+        exe = sys.executable
+        script = os.path.abspath(sys.argv[0])
+        params = " ".join(f'"{arg}"' for arg in sys.argv[1:])
+        cmd = f'"{script}" {params}'
+        ret = ctypes.windll.shell32.ShellExecuteW(
+            None,
+            "runas",
+            exe,
+            cmd,
+            None,
+            1
+        )
+
+    if ret <= 32:
+        raise RuntimeError(f"관리자 권한 요청 실패, ShellExecute 반환 코드: {ret}")
+
+
+def download_repo_zip():
+    print()
+    print("레포지토리 ZIP 파일을 다운로드합니다...")
+    try:
+        urllib.request.urlretrieve(REPO_LINK, ZIP_NAME)
+    except Exception as e:
+        print("[오류] 레포지토리 다운로드에 실패했습니다.")
+        print("사유:", e)
+        sys.exit(1)
+    print("레포지토리 ZIP 다운로드 완료.")
+
+
+def extract_repo_zip():
+    print()
+    print("레포지토리 압축을 해제합니다...")
+    try:
+        with zipfile.ZipFile(ZIP_NAME, "r") as zf:
+            zf.extractall(".")
+    except Exception as e:
+        print("[오류] 레포지토리 압축 해제에 실패했습니다.")
+        print("사유:", e)
+        sys.exit(1)
+    print("레포지토리 압축 해제 완료.")
+
+    if os.path.exists(ZIP_NAME):
+        try:
+            os.remove(ZIP_NAME)
+        except OSError:
+            pass
+
+
+def enter_project_directory():
+    if os.path.exists("app.py") and os.path.exists("requirements.txt"):
+        print("이미 프로젝트 디렉터리 내부에 있습니다. 클론 단계를 건너뜁니다.")
+        return
+
+    candidates = [
+        d for d in os.listdir(".")
+        if os.path.isdir(d) and d.startswith(PROJECT_PREFIX)
+    ]
+
+    if not candidates:
+        download_repo_zip()
+        extract_repo_zip()
+        candidates = [
+            d for d in os.listdir(".")
+            if os.path.isdir(d) and d.startswith(PROJECT_PREFIX)
+        ]
+        if not candidates:
+            print("[오류] 레포지토리 디렉터리를 찾지 못했습니다.")
+            sys.exit(1)
+
+    target = sorted(candidates)[0]
+    print()
+    print(f"프로젝트 디렉터리로 이동합니다: {target}")
+    os.chdir(target)
+
+
+def install_ffmpeg_windows():
+    if shutil.which("ffmpeg"):
+        print()
+        print("ffmpeg가 이미 PATH에 존재합니다. 설치를 건너뜁니다.")
+        return
+
+    if not os.path.exists("ffmpeg-win.ps1"):
+        print()
+        print("[오류] ffmpeg-win.ps1 스크립트를 찾을 수 없습니다.")
+        print("ffmpeg를 수동으로 설치한 뒤 다시 실행해주세요.")
+        sys.exit(1)
+
+    run_step(
+        "프로그램 실행을 위한 필수 확장 프로그램 설치",
+        ["powershell", "-ExecutionPolicy", "Bypass", "-File", "ffmpeg-win.ps1"],
+    )
+    add_ffmpeg_to_path_windows()
+
+
+def install_ffmpeg_macos():
+    if shutil.which("ffmpeg"):
+        print()
+        print("ffmpeg가 이미 설치되어 있습니다. 설치를 건너뜁니다.")
+        return
+
+    if not shutil.which("brew"):
+        print()
+        print("[오류] ffmpeg가 설치되어 있지 않고 Homebrew도 찾을 수 없습니다.")
+        print("ffmpeg를 수동으로 설치한 뒤 다시 실행해주세요.")
+        sys.exit(1)
+
+    run_step(
+        "프로그램 실행을 위한 필수 프로그램 설치",
+        ["brew", "install", "ffmpeg"],
+    )
+
+
 def main():
     clear_terminal()
     print("설치를 시작합니다!")
@@ -94,41 +241,7 @@ def main():
     print()
     print("현재 작업 디렉터리:", os.getcwd())
 
-    if os.path.exists("app.py") and os.path.exists("requirements.txt"):
-        print("이미 프로젝트 디렉터리 내부에 있습니다. 클론 단계를 건너뜁니다.")
-    else:
-        if not os.path.exists(REPO_DIR):
-            if platform.system() == "Windows":
-                run_step(
-                    "깃허브에서 데이터 다운로드",
-                    ["curl.exe", "-L", REPO_LINK, "-o", "PY-Garaoke.zip"],
-                )
-                run_step(
-                    "데이터 압축 해제",
-                    ["tar.exe", "-xf", REPO_DIR+".zip"],
-                )
-                run_step(
-                    "캐시파일 제거",
-                    ["del", REPO_DIR+".zip"],
-                )
-            else:
-                run_step(
-                    "깃허브에서 데이터 다운로드",
-                    ["curl", "-L", REPO_LINK, "-o", "PY-Garaoke.zip"],
-                )
-                run_step(
-                    "데이터 압축 해제",
-                    ["tar", "-xf", REPO_DIR+".zip"],
-                )
-                run_step(
-                    "캐시파일 제거",
-                    ["rm", "-rf", REPO_DIR+".zip"],
-                )
-        else:
-            print()
-            print("레포지토리가 이미 존재합니다. 클론을 건너뜁니다.")
-        
-        os.chdir(REPO_DIR)
+    enter_project_directory()
 
     run_step(
         "가상환경 생성",
@@ -152,17 +265,16 @@ def main():
         [venv_python, "-m", "pip", "install", "-r", "requirements.txt"],
     )
 
-    if platform.system() == "Windows":
-        run_step(
-            "프로그램 실행을 위한 필수 확장 프로그램 설치",
-            ["powershell", "-ExecutionPolicy", "Bypass", "-File", "ffmpeg-win.ps1"],
-        )
-        add_ffmpeg_to_path_windows()
+    system = platform.system()
+    if system == "Windows":
+        install_ffmpeg_windows()
+    elif system == "Darwin":
+        install_ffmpeg_macos()
     else:
-        run_step(
-            "프로그램 실행을 위한 필수 프로그램 설치",
-            ["brew", "install", "ffmpeg"],
-        )
+        print()
+        print(f"[오류] 현재 운영체제({system})는 자동 설치 스크립트에서 지원하지 않습니다.")
+        print("ffmpeg 및 의존성을 수동으로 설치한 뒤, 가상환경에서 app.py를 직접 실행해주세요.")
+        sys.exit(1)
 
     print()
     print("모든 준비가 완료되었습니다.")
@@ -171,56 +283,28 @@ def main():
     subprocess.run([venv_python, "app.py"])
 
 
-def has_internet(host="github.com", port=443, timeout=3):
-    try:
-        socket.create_connection((host, port), timeout)
-        return True
-    except OSError:
-        return False
-
-def is_admin_windows():
-    import ctypes
-    try:
-        return ctypes.windll.shell32.IsUserAnAdmin()
-    except:
-        return False
-
-
-def relaunch_as_admin_windows():
-    import ctypes, sys, os
-
-    exe = sys.executable
-    script = os.path.abspath(sys.argv[0])
-    params = " ".join(f'"{arg}"' for arg in sys.argv[1:])
-
-    cmd = f'"{script}" {params}'
-
-    ret = ctypes.windll.shell32.ShellExecuteW(
-        None,
-        "runas",
-        exe,
-        cmd,
-        None,
-        1
-    )
-
-    if ret <= 32:
-        raise RuntimeError(f"관리자 권한 요청 실패, ShellExecute 반환 코드: {ret}")
-
-
 if __name__ == "__main__":
-    import platform, sys
+    clear_terminal()
 
-    if platform.system() == "Windows" and not is_admin_windows():
-        print("관리자 권한 요청 중...")
-        relaunch_as_admin_windows()
-        sys.exit(0)
+    system = platform.system()
 
-    if has_internet():
-        try:
-            main()
-        except KeyboardInterrupt:
-            print()
-            print("설치가 사용자에 의해 중단되었습니다...")
-    else:
+    if system == "Windows":
+        if not is_admin_windows():
+            print("관리자 권한 요청 중...")
+            try:
+                relaunch_as_admin_windows()
+            except RuntimeError as e:
+                print()
+                print(e)
+                sys.exit(1)
+            sys.exit(0)
+
+    if not has_internet():
         print("인터넷 연결에 실패했습니다.\n설치를 위해선 인터넷에 연결해주세요!")
+        sys.exit(1)
+
+    try:
+        main()
+    except KeyboardInterrupt:
+        print()
+        print("설치가 사용자에 의해 중단되었습니다...")
