@@ -10,9 +10,49 @@ class KaraokeScorer:
         self.hop_length = hop_length
 
     def _extract_pitch(self, audio_path):
-        y, sr = librosa.load(audio_path, sr=self.sr)
-        f0, _, _ = librosa.pyin(y, fmin=librosa.note_to_hz('C2'), fmax=librosa.note_to_hz('C7'), sr=sr, hop_length=self.hop_length)
-        return f0, y, sr
+        # Optimize: Load at a lower sample rate (8000 Hz) for faster pitch detection
+        # This significantly reduces the data size and processing time for pyin
+        analysis_sr = 8000
+        y, sr = librosa.load(audio_path, sr=analysis_sr)
+        
+        # Use a slightly larger hop_length relative to the lower SR to keep frames reasonable
+        # 22050 / 512 ~= 43 Hz resolution. 8000 / 192 ~= 41 Hz resolution.
+        hop_length_low = int(self.hop_length * (analysis_sr / self.sr))
+        if hop_length_low < 64: hop_length_low = 64
+
+        # Run pyin on the downsampled audio
+        f0, _, _ = librosa.pyin(y, fmin=librosa.note_to_hz('C2'), fmax=librosa.note_to_hz('C7'), sr=sr, hop_length=hop_length_low)
+        
+        # Interpolate f0 back to the original sample rate/hop_length timeline if necessary for exact alignment
+        # But since we compare user vs ref, as long as both are processed this way, it's fine.
+        # However, the scoring logic compares frame-by-frame. We must ensure user and ref have same time grid.
+        # The scorer uses self.hop_length and self.sr. 
+        # If we return a different time grid, scoring will fail or misalign.
+        
+        # To fix alignment without complex interpolation: 
+        # 1. Calculate times for the low-sr frames.
+        # 2. Resample f0 to the expected original timeline (sr=22050, hop=512).
+        
+        times_low = librosa.times_like(f0, sr=sr, hop_length=hop_length_low)
+        times_orig = np.arange(0, len(y)/sr, self.hop_length/self.sr)
+        
+        # Interpolate f0 to original timeline
+        f0_interp = np.interp(times_orig, times_low, f0, left=np.nan, right=np.nan)
+        
+        # Also we need y at original SR for rhythm calculation? 
+        # The _calculate_rhythm_accuracy uses onset detection.
+        # We should probably just reload y at original SR if needed, or accept the low SR y.
+        # _calculate_rhythm_accuracy takes y and sr as args. So we can pass the low SR versions!
+        # But wait, _calculate_pitch_accuracy compares user_f0 and ref_f0.
+        # If we extract both with this method, they will align to times_orig (calculated above).
+        # So we are good!
+        
+        # We return the interpolated f0 matching the global grid, but the low-sr audio.
+        # This is a compromise. Rhythm detection on 8kHz is "okay" but not perfect.
+        # For better quality, we might reload y at full SR, but that's slow I/O.
+        # Let's return the low SR y and sr. The rhythm function handles its own onset detection.
+        
+        return f0_interp, y, sr
 
     def _quantize_pitch_to_notes(self, f0):
         # Convert frequency to MIDI notes, then to the nearest musical note

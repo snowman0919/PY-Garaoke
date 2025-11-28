@@ -38,6 +38,7 @@ class Controller(QObject):
     update_playback_position_signal = Signal(float)
     update_realtime_pitch_signal = Signal(float)
     update_lyrics_signal = Signal(str)
+    update_reference_pitch_signal = Signal(list, float) # New signal for thread-safe UI update
 
     # Signals for results screen
     show_results_signal = Signal(dict, list, list, list)
@@ -87,6 +88,9 @@ class Controller(QObject):
         self.start_singing_ui_signal.connect(self.main_window.show_singing_screen)
         self.song_metadata_updated_signal.connect(self.update_song_list) # Refresh list after metadata edit
         self.show_results_signal.connect(self.main_window.results_widget.display_results)
+        
+        # Connect new thread-safe signal
+        self.update_reference_pitch_signal.connect(self.main_window.singing_widget.set_reference_pitch_contour)
 
         # Connect singing screen updates
         self.update_playback_position_signal.connect(self.main_window.singing_widget.update_playback_position)
@@ -333,13 +337,17 @@ class Controller(QObject):
             self.show_error_signal.emit(f"Could not load instrumental track for {selected_song['title']}.")
             return
         
-        # Load lyrics if available (placeholder)
+        # Load lyrics if available
         lyrics_path = mr_path.replace("_mr.wav", ".lrc") # Example convention
+        self.current_song_lyrics = []
         if os.path.exists(lyrics_path):
-            with open(lyrics_path, "r", encoding="utf-8") as f:
-                self.current_song_lyrics = f.readlines()
-        else:
-            self.current_song_lyrics = []
+            try:
+                with open(lyrics_path, "r", encoding="utf-8") as f:
+                    raw_lines = f.readlines()
+                    self.current_song_lyrics = self._parse_lyrics(raw_lines)
+            except Exception as e:
+                print(f"Error loading lyrics: {e}")
+                self.current_song_lyrics = []
 
         # Prepare UI elements
         self.main_window.singing_widget.set_reference_pitch_contour([], selected_song["duration"]) # Empty for now, will generate later
@@ -353,12 +361,41 @@ class Controller(QObject):
         QTimer.singleShot(2000, lambda: self.show_message_signal.emit("Countdown: 1..."))
         QTimer.singleShot(3000, self._start_singing_after_countdown)
 
+    def _parse_lyrics(self, raw_lines):
+        parsed_lyrics = []
+        for line in raw_lines:
+            line = line.strip()
+            if line.startswith("[") and "]" in line:
+                try:
+                    time_tag_end = line.find("]")
+                    time_tag = line[1:time_tag_end]
+                    lyric_text = line[time_tag_end+1:].strip()
+                    
+                    # Parse time tag mm:ss.xx
+                    if ":" in time_tag:
+                        parts = time_tag.split(":")
+                        minutes = float(parts[0])
+                        seconds = float(parts[1])
+                        timestamp = minutes * 60 + seconds
+                        parsed_lyrics.append((timestamp, lyric_text))
+                except ValueError:
+                    pass # Skip lines with invalid time format
+        
+        # Sort by timestamp just in case
+        parsed_lyrics.sort(key=lambda x: x[0])
+        return parsed_lyrics
+
     def _extract_and_set_reference_pitch(self, song_data):
         try:
             sr_path = song_data["sr_path"]
             f0_ref, _, _ = self.karaoke_scorer._extract_pitch(sr_path)
-            # Pass the extracted f0 to the UI for visualization
-            self.main_window.singing_widget.set_reference_pitch_contour(f0_ref[~np.isnan(f0_ref)].tolist(), song_data["duration"])
+            
+            # Replace NaNs with 0.0 to preserve time alignment (index = time)
+            # If we just drop NaNs, we lose the timing information.
+            f0_ref = np.nan_to_num(f0_ref, nan=0.0)
+            
+            # Pass the full, time-aligned contour to the UI via Signal
+            self.update_reference_pitch_signal.emit(f0_ref.tolist(), song_data["duration"])
         except Exception as e:
             self.show_error_signal.emit(f"Error extracting reference pitch for UI: {e}")
 
@@ -391,8 +428,17 @@ class Controller(QObject):
 
         self.update_playback_position_signal.emit(effective_time)
 
-        # Update lyrics (very basic, just showing current time for now)
-        self.update_lyrics_signal.emit(f"Time: {effective_time:.2f}s")
+        # Update lyrics
+        current_lyric = ""
+        if self.current_song_lyrics:
+            # Find the last lyric that has a timestamp <= effective_time
+            for timestamp, text in self.current_song_lyrics:
+                if effective_time >= timestamp:
+                    current_lyric = text
+                else:
+                    break # Since lyrics are sorted, we can stop early
+        
+        self.update_lyrics_signal.emit(current_lyric)
 
     def stop_singing(self):
         self.playback_timer.stop()

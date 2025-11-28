@@ -184,100 +184,152 @@ class PitchVisualizationWidget(QWidget):
         self.setMinimumHeight(200)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-        self.reference_pitch_contour = []
-        self.user_pitch_points = [] # list of (time, pitch_hz)
-        self.total_duration = 1.0 # default to 1 sec to avoid div by zero
-        self.playback_cursor_time = 0.0
+        # Prevent flickering by disabling system background clearing
+        self.setAttribute(Qt.WA_OpaquePaintEvent)
+        self.setAttribute(Qt.WA_NoSystemBackground)
 
+        self.reference_pitch_contour = [] # List of Hz values
+        self.user_pitch_points = [] # List of (time, pitch_hz) tuples
+        self.total_duration = 1.0 
+        self.playback_cursor_time = 0.0
+        
+        # Default audio parameters (should match Scoring/Analysis defaults)
+        self.sr = 22050
+        self.hop_length = 512
+        self.frame_duration = self.hop_length / self.sr
+
+        # Visualization parameters
+        self.visible_window = 10.0 # seconds
         self.pitch_min = librosa.note_to_hz('C2')
-        self.pitch_max = librosa.note_to_hz('C7')
+        self.pitch_max = librosa.note_to_hz('C6') # Adjusted range for typical vocals
         self.pitch_range_log = np.log2(self.pitch_max) - np.log2(self.pitch_min)
 
-        self.setMouseTracking(True) # For potential future interaction
+        self.setMouseTracking(True) 
 
-    def set_reference_pitch(self, pitch_contour, duration):
+    def set_reference_pitch(self, pitch_contour, duration, sr=22050, hop_length=512):
         self.reference_pitch_contour = pitch_contour
         self.total_duration = duration
+        self.sr = sr
+        self.hop_length = hop_length
+        self.frame_duration = self.hop_length / self.sr
         self.user_pitch_points = []
         self.update()
 
     def update_user_pitch(self, pitch_hz):
-        if pitch_hz > 0: # Only add if a valid pitch is detected
+        if pitch_hz > 0:
             self.user_pitch_points.append((self.playback_cursor_time, pitch_hz))
-            # Keep a limited history for performance
-            if len(self.user_pitch_points) > 500: # ~10 seconds at 50 updates/sec
+            
+            # Prune old points to keep memory usage low, but keep enough for history
+            # Keep points within the last 'visible_window' + some buffer
+            min_time = self.playback_cursor_time - self.visible_window
+            while self.user_pitch_points and self.user_pitch_points[0][0] < min_time:
                 self.user_pitch_points.pop(0)
-        self.update()
+                
+        self.update() # Request repaint
 
     def update_playback_cursor(self, current_time_sec):
         self.playback_cursor_time = current_time_sec
-        self.update() # Trigger repaint
+        self.update() # Request repaint
 
     def _pitch_to_y(self, pitch_hz, height):
         if pitch_hz <= 0:
-            return -1 # Out of bounds / unvoiced
+            return -1
         
-        # Logarithmic scale for pitch
-        log_pitch = np.log2(pitch_hz)
+        try:
+            log_pitch = np.log2(pitch_hz)
+        except:
+            return -1
+
         log_pitch_min = np.log2(self.pitch_min)
         log_pitch_max = np.log2(self.pitch_max)
         
         # Normalize to 0-1 range
         normalized_pitch = (log_pitch - log_pitch_min) / (log_pitch_max - log_pitch_min)
         
-        # Invert y-axis for GUI (higher pitch = lower y value)
+        # Clamp
+        normalized_pitch = max(0.0, min(1.0, normalized_pitch))
+        
+        # Invert y-axis
         return height * (1 - normalized_pitch)
 
-    def _time_to_x(self, time_sec, width):
-        return int((time_sec / self.total_duration) * width)
+    def _time_to_x(self, time_sec, width, start_time):
+        # Map time within the window [start_time, start_time + visible_window] to [0, width]
+        rel_time = time_sec - start_time
+        return int((rel_time / self.visible_window) * width)
 
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
+        
+        # Manually clear the background since we disabled system background clearing
+        painter.fillRect(self.rect(), QColor(30, 30, 40)) # Dark background
 
         width = self.width()
         height = self.height()
 
-        # Draw background (handled by QSS)
+        # Define visible time window
+        # Keep cursor at roughly 30% of the screen width so user sees upcoming notes
+        start_time = max(0, self.playback_cursor_time - (self.visible_window * 0.3))
+        end_time = start_time + self.visible_window
 
-        # Draw reference pitch contour (target melody)
-        if self.reference_pitch_contour and self.total_duration > 0:
-            painter.setPen(QColor(0, 150, 255, 150)) # Light blue/cyan for reference
+        # Draw Reference Pitch (Guide)
+        if self.reference_pitch_contour:
+            painter.setPen(QColor(100, 150, 255, 180)) # Blue-ish
+            painter.setBrush(QBrush(QColor(100, 150, 255, 180)))
+            
+            # Determine frame range to draw
+            start_frame = int(start_time / self.frame_duration)
+            end_frame = int(end_time / self.frame_duration) + 1
+            
+            start_frame = max(0, start_frame)
+            end_frame = min(len(self.reference_pitch_contour), end_frame)
+
+            # Draw individual segments for "piano roll" effect
+            # Use a simple line strip for now as it's smoother for raw contours
             prev_x, prev_y = -1, -1
             
-            # Assuming reference_pitch_contour is already in Hz
-            # Convert frame index to time, then time to x
-            # Assuming uniform sampling for reference_pitch_contour (e.g., from librosa.pyin)
-            # The contour has a hop_length, so each point corresponds to a time.
-            
-            # Simplified: just iterate through points and draw lines
-            for i, pitch_hz in enumerate(self.reference_pitch_contour):
+            for i in range(start_frame, end_frame):
+                pitch_hz = self.reference_pitch_contour[i]
                 if pitch_hz > 0:
-                    time_sec = (i * self.scorer.hop_length / self.scorer.sr) # Needs actual scorer reference
-                    # This implies SingingWidget should pass the scorer's sr/hop_length to PitchVisualizationWidget
-                    # For now, will use placeholder hop/sr (needs to be aligned with actual librosa analysis)
-                    time_sec = (i * self.scorer.hop_length / self.scorer.sr)
-
-                    x = self._time_to_x(time_sec, width)
+                    time_sec = i * self.frame_duration
+                    x = self._time_to_x(time_sec, width, start_time)
                     y = self._pitch_to_y(pitch_hz, height)
                     
-                    if prev_x != -1:
+                    # Connect lines if previous point was valid and close in time
+                    if prev_x != -1 and (time_sec - ((i-1) * self.frame_duration)) < (self.frame_duration * 1.5):
                         painter.drawLine(prev_x, prev_y, x, y)
+                    else:
+                        # Draw a dot if start of a new segment
+                        painter.drawEllipse(x-1, y-1, 2, 2)
+                    
                     prev_x, prev_y = x, y
+                else:
+                    prev_x, prev_y = -1, -1
 
-        # Draw user's real-time pitch
+        # Draw User Pitch (Real-time)
         if self.user_pitch_points:
-            painter.setPen(QColor(255, 255, 0)) # Yellow for user pitch
+            painter.setPen(QColor(255, 200, 50)) # Golden yellow
+            prev_x, prev_y = -1, -1
+            
             for time_sec, pitch_hz in self.user_pitch_points:
-                x = self._time_to_x(time_sec, width)
+                if time_sec < start_time or time_sec > end_time:
+                    continue
+                    
+                x = self._time_to_x(time_sec, width, start_time)
                 y = self._pitch_to_y(pitch_hz, height)
-                if x >= 0 and y >= 0: # Ensure point is visible
-                    painter.drawEllipse(x - 2, y - 2, 4, 4) # Draw small dot
+                
+                if prev_x != -1:
+                    painter.drawLine(prev_x, prev_y, x, y)
+                else:
+                     painter.drawEllipse(x-2, y-2, 4, 4)
+                
+                prev_x, prev_y = x, y
 
-        # Draw playback cursor
-        cursor_x = self._time_to_x(self.playback_cursor_time, width)
-        painter.setPen(QColor(255, 0, 0)) # Red cursor
-        painter.drawLine(cursor_x, 0, cursor_x, height)
+        # Draw Playback Cursor Line
+        cursor_x = self._time_to_x(self.playback_cursor_time, width, start_time)
+        if 0 <= cursor_x <= width:
+            painter.setPen(QColor(255, 50, 50, 200)) # Red line
+            painter.drawLine(cursor_x, 0, cursor_x, height)
 
 class ResultsWidget(QWidget):
     back_to_home_requested = Signal()
