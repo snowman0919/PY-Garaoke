@@ -301,6 +301,26 @@ def main():
         stream_output=True,
     )
 
+    clear_terminal()
+    print('''설치를 시작합니다!
+잠시만 기다려주세요...
+
+현재 작업 디렉터리: C:\Programing
+
+레포지토리 ZIP 파일을 다운로드합니다...
+레포지토리 ZIP 다운로드 완료.
+
+레포지토리 압축을 해제합니다...
+레포지토리 압축 해제 완료.
+
+프로젝트 디렉터리로 이동합니다: PY-Garaoke-main
+
+가상환경 생성 완료!
+
+패키지 관리자 설치 및 업데이트 완료!
+
+프로그램 실행을 위한 필수 패키지 설치 완료!''')
+
     system = platform.system()
     if system == "Windows":
         install_ffmpeg_windows()
