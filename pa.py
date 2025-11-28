@@ -21,47 +21,82 @@ def clear_terminal():
         os.system("clear")
 
 
-def run_step(title, cmd, cwd=None):
+def run_step(title, cmd, cwd=None, stream_output=False):
     print()
     base_text = f"{title} 중입니다"
-    print(base_text, end="", flush=True)
 
-    proc = subprocess.Popen(
-        cmd,
-        cwd=cwd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        shell=False,
-    )
+    if not stream_output:
+        print(base_text, end="", flush=True)
 
-    dot = 0
-    while True:
-        ret = proc.poll()
-        if ret is not None:
-            break
-        dot = (dot + 1) % 4
-        dots = "." * dot
-        padding = " " * (3 - dot)
-        text = f"\r{base_text}{dots}{padding}"
-        print(text, end="", flush=True)
-        time.sleep(0.4)
+        proc = subprocess.Popen(
+            cmd,
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=False,
+        )
 
-    stdout, stderr = proc.communicate()
+        dot = 0
+        while True:
+            ret = proc.poll()
+            if ret is not None:
+                break
+            dot = (dot + 1) % 4
+            dots = "." * dot
+            padding = " " * (3 - dot)
+            text = f"\r{base_text}{dots}{padding}"
+            print(text, end="", flush=True)
+            time.sleep(0.4)
 
-    if proc.returncode != 0:
-        print()
-        print(f"[오류] {title} 단계에서 문제가 발생했습니다.")
-        if stderr:
-            try:
-                msg = stderr.decode("utf-8", errors="ignore")
-            except Exception:
-                msg = str(stderr)
-            print("오류 메시지:")
-            print(msg.strip())
-        sys.exit(1)
+        stdout, stderr = proc.communicate()
 
-    done_text = f"\r{title} 완료!"
-    print(done_text + " " * 10)
+        if proc.returncode != 0:
+            print()
+            print(f"[오류] {title} 단계에서 문제가 발생했습니다.")
+            if stderr:
+                try:
+                    msg = stderr.decode("utf-8", errors="ignore")
+                except Exception:
+                    msg = str(stderr)
+                print("오류 메시지:")
+                print(msg.strip())
+            sys.exit(1)
+
+        done_text = f"\r{title} 완료!"
+        print(done_text + " " * 10)
+
+    else:
+        print(base_text, flush=True)
+
+        proc = subprocess.Popen(
+            cmd,
+            cwd=cwd,
+            stdout=None,
+            stderr=subprocess.PIPE,
+            shell=False,
+        )
+
+        while True:
+            ret = proc.poll()
+            if ret is not None:
+                break
+            time.sleep(0.3)
+
+        stderr = proc.stderr.read() if proc.stderr else b""
+
+        if proc.returncode != 0:
+            print()
+            print(f"[오류] {title} 단계에서 문제가 발생했습니다.")
+            if stderr:
+                try:
+                    msg = stderr.decode("utf-8", errors="ignore")
+                except Exception:
+                    msg = str(stderr)
+                print("오류 메시지:")
+                print(msg.strip())
+            sys.exit(1)
+
+        print(f"{title} 완료!")
 
 
 def get_venv_python():
@@ -263,6 +298,7 @@ def main():
     run_step(
         "프로그램 실행을 위한 필수 패키지 설치",
         [venv_python, "-m", "pip", "install", "-r", "requirements.txt"],
+        stream_output=True,
     )
 
     system = platform.system()
