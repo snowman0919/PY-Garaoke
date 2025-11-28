@@ -149,6 +149,8 @@ class Controller(QObject):
                     'preferredcodec': 'wav',
                     'preferredquality': '192',
                 }],
+                # Force stereo output so downstream stem separation always sees 2 channels
+                'postprocessor_args': ['-ac', '2'],
                 'outtmpl': os.path.join(output_dir, f"{song_id}.%(ext)s"),
                 'quiet': False, # Enable logging for debug
                 'no_warnings': False,
@@ -212,6 +214,7 @@ class Controller(QObject):
                         try:
                             # AudioSegment.from_file handles various formats
                             audio = AudioSegment.from_file(source_file)
+                            audio = audio.set_channels(2) # Ensure stereo
                             audio.export(downloaded_file, format="wav")
                             found = True
                         except Exception as conv_err:
@@ -254,6 +257,11 @@ class Controller(QObject):
 
             self.stem_separation_progress_signal.emit(f"Separating stems using {device} for {title}...")
             wav, model_sr = torchaudio.load(downloaded_file)
+            # Demucs expects stereo input; downmix/duplicate as needed
+            if wav.shape[0] == 1:
+                wav = torch.cat([wav, wav], dim=0)
+            elif wav.shape[0] > 2:
+                wav = wav.mean(dim=0, keepdim=True).repeat(2, 1)
             wav = wav.unsqueeze(0)
 
             with torch.no_grad():
