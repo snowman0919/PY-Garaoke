@@ -1,22 +1,39 @@
-# 최신 ffmpeg 릴리즈 zip 다운로드 (공식 static build)
+$ErrorActionPreference = "Stop"
+
 $zipUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
-$zipPath = "$env:USERPROFILE\Downloads\ffmpeg.zip"
+$zipPath = "$env:TEMP\ffmpeg.zip"
 $extractPath = "$env:USERPROFILE\ffmpeg"
 
-Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath
+Write-Host "ffmpeg 다운로드 중..."
+Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing
+
+Write-Host "압축 해제 중..."
+if (Test-Path $extractPath) {
+    Remove-Item -Recurse -Force $extractPath
+}
 Expand-Archive -Path $zipPath -DestinationPath $extractPath
 
-# bin 폴더 실제 경로 (폴더명에 버전번호가 있음)
-$binPath = Get-ChildItem "$extractPath\ffmpeg-*" -Directory | Select-Object -First 1 | ForEach-Object { "$($_.FullName)\bin" }
+Remove-Item $zipPath -Force
 
-# 사용자 환경변수 PATH에 bin 추가
+$binPath = Get-ChildItem "$extractPath\ffmpeg-*" -Directory |
+           Sort-Object LastWriteTime -Descending |
+           Select-Object -First 1 |
+           ForEach-Object { Join-Path $_.FullName "bin" }
+
+if (-not (Test-Path "$binPath\ffmpeg.exe")) {
+    Write-Host "ffmpeg.exe를 찾지 못했습니다."
+    exit 1
+}
+
 $envPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+if (-not $envPath) { $envPath = "" }
+
 if ($envPath -notlike "*$binPath*") {
-    [System.Environment]::SetEnvironmentVariable("Path", "$envPath;$binPath", "User")
-    Write-Host "PATH에 $binPath 추가 완료. 새 콘솔을 열어야 적용됩니다."
+    $newPath = "$envPath;$binPath".Trim(";")
+    [System.Environment]::SetEnvironmentVariable("Path", $newPath, "User")
+    Write-Host "PATH 등록 완료."
 } else {
     Write-Host "이미 PATH에 등록되어 있습니다."
 }
 
-# 완료 안내
-Write-Host "ffmpeg 설치 및 환경변수 등록이 완료되었습니다."
+Write-Host "ffmpeg 설치 및 설정 완료."
