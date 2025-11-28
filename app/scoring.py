@@ -90,15 +90,12 @@ class KaraokeScorer:
 
     def _calculate_rhythm_accuracy(self, user_y, user_sr, ref_y, ref_sr, tolerance_frames=3):
         # Onset detection for both signals
-        user_onset_env = librosa.onset.onset_detect(y=user_y, sr=user_sr, hop_length=self.hop_length)
-        ref_onset_env = librosa.onset.onset_detect(y=ref_y, sr=ref_sr, hop_length=self.hop_length)
+        user_onsets = librosa.onset.onset_detect(y=user_y, sr=user_sr, hop_length=self.hop_length)
+        ref_onsets = librosa.onset.onset_detect(y=ref_y, sr=ref_sr, hop_length=self.hop_length)
 
-        user_onsets = librosa.onset.onset_detect(onset_envelope=user_onset_env, sr=user_sr, hop_length=self.hop_length)
-        ref_onsets = librosa.onset.onset_detect(onset_envelope=ref_onset_env, sr=ref_sr, hop_length=self.hop_length)
-
-        # Convert to frame indices
-        user_onset_frames = librosa.frames_to_time(user_onsets, sr=user_sr, hop_length=self.hop_length) * (user_sr / self.hop_length)
-        ref_onset_frames = librosa.frames_to_time(ref_onsets, sr=ref_sr, hop_length=self.hop_length) * (ref_sr / self.hop_length)
+        # Use frame indices directly
+        user_onset_frames = user_onsets
+        ref_onset_frames = ref_onsets
 
         if len(ref_onset_frames) == 0:
             return 100.0 # No reference onsets, perfect rhythm (or no rhythm to match)

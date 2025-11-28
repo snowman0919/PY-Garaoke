@@ -91,18 +91,11 @@ class TestKaraokeScorer(unittest.TestCase):
     @patch('librosa.onset.onset_detect')
     def test_calculate_rhythm_accuracy(self, mock_onset_detect):
         # Mock onset_detect to return predefined onset frames
-        # The implementation calls onset_detect 4 times:
-        # 1. user_onset_env
-        # 2. ref_onset_env
-        # 3. user_onsets (from env)
-        # 4. ref_onsets (from env)
-        
-        # Dummy envelopes
-        dummy_env = np.zeros(100)
+        # The implementation calls onset_detect 2 times:
+        # 1. user_onsets
+        # 2. ref_onsets
         
         mock_onset_detect.side_effect = [
-            dummy_env, # user_env
-            dummy_env, # ref_env
             np.array([10, 50, 90, 130]), # user_onsets
             np.array([12, 52, 90, 132])  # ref_onsets
         ]
@@ -115,8 +108,6 @@ class TestKaraokeScorer(unittest.TestCase):
         self.assertAlmostEqual(score, 100.0)
 
         mock_onset_detect.side_effect = [
-            dummy_env,
-            dummy_env,
             np.array([10, 50, 90, 130]), # user_onsets
             np.array([12, 60, 120, 150]) # ref_onsets
         ]
@@ -129,8 +120,6 @@ class TestKaraokeScorer(unittest.TestCase):
 
         # No reference onsets
         mock_onset_detect.side_effect = [
-            dummy_env,
-            dummy_env,
             np.array([10, 50]), # user_y onsets
             np.array([]) # ref_y onsets
         ]
