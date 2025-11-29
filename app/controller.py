@@ -1,5 +1,4 @@
 import os
-import uuid
 import json
 import requests
 import asyncio
@@ -8,8 +7,6 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
-import yt_dlp
-from pydub import AudioSegment
 
 from PySide6.QtCore import QObject, Signal, QTimer, QThread
 from PySide6.QtWidgets import QApplication, QMessageBox
@@ -18,6 +15,7 @@ from app.storage import StorageManager
 from app.audio import AudioPlayer, AudioRecorder, RealtimePitchDetector
 from app.scoring import KaraokeScorer
 from app.ui import NicknameDialog, AddSongDialog, MainWindow
+from app.song_processor import SongProcessor
 
 # Use a global thread pool for long-running tasks like download/stem separation
 # to keep the GUI responsive
@@ -51,6 +49,7 @@ class Controller(QObject):
         self.audio_recorder = AudioRecorder()
         self.realtime_pitch_detector = RealtimePitchDetector()
         self.karaoke_scorer = KaraokeScorer()
+        self.song_processor = SongProcessor(self.storage, self.karaoke_scorer)
 
         self.current_user_nickname = None
         self.current_song_data = None # Currently selected song for singing
@@ -74,7 +73,9 @@ class Controller(QObject):
         # Audio Signals
         self.audio_player.position_changed.connect(self.update_playback_position_signal)
         self.audio_player.finished.connect(self.handle_singing_finished)
+        self.audio_player.playback_failed.connect(self.handle_audio_error)
         self.audio_recorder.finished.connect(self.process_recorded_take)
+        self.audio_recorder.recording_failed.connect(self.handle_audio_error)
         self.realtime_pitch_detector.pitch_detected.connect(self.update_realtime_pitch_signal)
         self.realtime_pitch_detector.volume_detected.connect(lambda vol: None) # Can use for UI feedback later
 
@@ -136,194 +137,28 @@ class Controller(QObject):
         thread_pool.submit(self._download_and_separate_song, url_or_query)
 
     def _download_and_separate_song(self, url_or_query):
+        def progress_cb(msg):
+            self.song_download_progress_signal.emit(msg)
+        
         try:
-            # 1. Download audio
-            song_id = str(uuid.uuid4())
-            output_path = self.storage.get_song_file_path(song_id)
-            output_dir = os.path.dirname(output_path)
+            # Use SongProcessor to handle the heavy lifting
+            song_metadata = self.song_processor.process_song(
+                url_or_query, 
+                progress_callback=progress_cb
+            )
             
-            ydl_opts = {
-                'format': 'bestaudio/best',
-                'postprocessors': [{
-                    'key': 'FFmpegExtractAudio',
-                    'preferredcodec': 'wav',
-                    'preferredquality': '192',
-                }],
-                # Force stereo output so downstream stem separation always sees 2 channels
-                'postprocessor_args': ['-ac', '2'],
-                'outtmpl': os.path.join(output_dir, f"{song_id}.%(ext)s"),
-                'quiet': False, # Enable logging for debug
-                'no_warnings': False,
-                'noplaylist': True,
-                'default_search': 'ytsearch',
-                # Let yt-dlp pick a working client (android sdkless / web_safari) instead of forcing one
-                # 'extractor_args': {'youtube': {'player_client': ['default']}},
-                # 'username': 'oauth2', 
-                # 'password': '',
-            }
-
-            # If input is not a URL, assume it's a search query
-            if not url_or_query.startswith(("http://", "https://")):
-                url_or_query = f"ytsearch1:{url_or_query}"
-
-            self.song_download_progress_signal.emit("Starting download...")
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info_dict = ydl.extract_info(url_or_query, download=True)
-                # If a search query was used, info_dict will contain results for the first video
-                if 'entries' in info_dict:
-                    if not info_dict['entries']:
-                         raise Exception("No search results found.")
-                    info_dict = info_dict['entries'][0]
-
-                title = info_dict.get('title', 'Unknown Title')
-                artist = info_dict.get('artist', info_dict.get('uploader', 'Unknown Artist'))
-                duration_sec = info_dict.get('duration', 0)
-                youtube_url = info_dict.get('webpage_url', url_or_query)
-
-            # Ensure the downloaded file is named correctly as WAV
-            downloaded_file = os.path.join(output_dir, f"{song_id}.wav")
-            
-            # Cleanup: Remove any .mhtml files that might have been downloaded due to client errors
-            for f in os.listdir(output_dir):
-                if f.startswith(song_id) and f.endswith(".mhtml"):
-                    try:
-                        os.remove(os.path.join(output_dir, f))
-                    except OSError:
-                        pass
-
-            if not os.path.exists(downloaded_file):
-                # Search for any file starting with song_id
-                files_in_output = os.listdir(output_dir)
-                possible_files = [f for f in files_in_output if f.startswith(song_id)]
-                
-                # Filter out non-audio files (like .mhtml which yt-dlp might produce on some errors/captchas)
-                valid_audio_exts = {'.wav', '.mp3', '.flac', '.m4a', '.webm', '.ogg', '.opus', '.aac', '.wma', '.mp4'}
-                audio_candidates = [f for f in possible_files if os.path.splitext(f)[1].lower() in valid_audio_exts]
-                
-                found = False
-                last_conv_error = None
-                if audio_candidates:
-                    # Prioritize .wav files
-                    wav_files = [f for f in audio_candidates if f.endswith('.wav')]
-                    if wav_files:
-                        os.rename(os.path.join(output_dir, wav_files[0]), downloaded_file)
-                        found = True
-                    else:
-                        # Try to convert whatever we found (e.g. .webm, .m4a, or no extension)
-                        source_file = os.path.join(output_dir, audio_candidates[0])
-                        try:
-                            # AudioSegment.from_file handles various formats
-                            audio = AudioSegment.from_file(source_file)
-                            audio = audio.set_channels(2) # Ensure stereo
-                            audio.export(downloaded_file, format="wav")
-                            found = True
-                        except Exception as conv_err:
-                            print(f"Failed to convert {source_file} to wav: {conv_err}")
-                            last_conv_error = conv_err
-                
-                if not found:
-                    error_msg = f"Downloaded WAV file not found for {song_id}. Output dir contains: {files_in_output}"
-                    if last_conv_error:
-                        error_msg += f". Last conversion error: {last_conv_error}"
-                    raise FileNotFoundError(error_msg)
-
-            self.song_download_progress_signal.emit(f"Downloaded: {title} by {artist}")
-
-            # 2. Stem Separation
-            self.stem_separation_progress_signal.emit(f"Separating stems for {title}...")
-            mr_path = self.storage.get_stem_file_path(song_id, "mr")
-            sr_path = self.storage.get_stem_file_path(song_id, "sr")
-
-            # Demucs command example (replace with actual Python API call)
-            # This requires demucs to be installed and runnable via its Python API or CLI
-            # from demucs.api import separate_into_parts
-            # separate_into_parts(downloaded_file, [mr_path, sr_path])
-            
-            # Placeholder for Demucs integration. Requires correct API usage.
-            # If demucs is tricky via API, subprocess call is an alternative:
-            # result = subprocess.run(['demucs', '-o', self.storage.stems_dir, '--filename={stem}.wav', downloaded_file], capture_output=True, text=True)
-            # print(result.stdout, result.stderr)
-
-            from demucs_infer.pretrained import get_model
-            from demucs_infer.apply import apply_model
-            from demucs_infer.audio import save_audio
-            import torch
-            import torchaudio
-
-            self.stem_separation_progress_signal.emit(f"Loading Demucs model for {title}...")
-            model = get_model("htdemucs_ft")
-            model.eval()
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-
-            self.stem_separation_progress_signal.emit(f"Separating stems using {device} for {title}...")
-            wav, model_sr = torchaudio.load(downloaded_file)
-            # Demucs expects stereo input; downmix/duplicate as needed
-            if wav.shape[0] == 1:
-                wav = torch.cat([wav, wav], dim=0)
-            elif wav.shape[0] > 2:
-                wav = wav.mean(dim=0, keepdim=True).repeat(2, 1)
-            wav = wav.unsqueeze(0)
-
-            with torch.no_grad():
-                sources = apply_model(model, wav, device=device)
-            
-            # Save stems
-            vocals_stem = None
-            accompaniment_stems = []
-            
-            for i, source_name in enumerate(model.sources):
-                source_tensor = sources[0, i] # Remove batch dimension
-                if source_name == "vocals":
-                    vocals_stem = source_tensor
-                else:
-                    accompaniment_stems.append(source_tensor)
-
-            if vocals_stem is not None:
-                save_audio(vocals_stem, sr_path, model_sr)
-            else:
-                # If no vocals stem found by name, create a silent one or handle error
-                AudioSegment.silent(duration=duration_sec * 1000, frame_rate=self.audio_player.sr).export(sr_path, format="wav")
-                self.show_error_signal.emit(f"Vocals stem not found for {title}, created silent vocal track.")
-
-            if accompaniment_stems:
-                # Mix all accompaniment stems into one
-                mixed_accompaniment = torch.sum(torch.stack(accompaniment_stems), dim=0)
-                save_audio(mixed_accompaniment, mr_path, model_sr)
-            else:
-                # If no accompaniment stems, create a silent one or handle error
-                AudioSegment.silent(duration=duration_sec * 1000, frame_rate=self.audio_player.sr).export(mr_path, format="wav")
-                self.show_error_signal.emit(f"Accompaniment stems not found for {title}, created silent instrumental track.")
-
-
-            self.stem_separation_progress_signal.emit(f"Stems separated for {title}")
-
-            # 3. Store metadata
-            song_metadata = {
-                "id": song_id,
-                "title": title,
-                "artist": artist,
-                "duration": duration_sec,
-                "youtube_url": youtube_url,
-                "file_path": downloaded_file,
-                "mr_path": mr_path,
-                "sr_path": sr_path,
-                "start_time": 0,
-                "end_time": duration_sec
-            }
+            # Store result
             self.all_songs.append(song_metadata)
             self.storage.save_songs(self.all_songs)
+            
             self.update_song_list_signal.emit(self.all_songs)
-            self.show_message_signal.emit(f"Song '{title}' added and processed!")
+            self.show_message_signal.emit(f"Song '{song_metadata['title']}' added and processed!")
 
-        except yt_dlp.utils.DownloadError as e:
-            self.show_error_signal.emit(f"YouTube Download Error: {e}")
-        except FileNotFoundError as e:
-            self.show_error_signal.emit(f"File system error during song processing: {e}")
         except Exception as e:
-            self.show_error_signal.emit(f"An unexpected error occurred during song download/separation: {e}")
+            self.show_error_signal.emit(f"Error adding song: {e}")
         finally:
-            self.song_download_progress_signal.emit("") # Clear status bar
-            self.stem_separation_progress_signal.emit("") # Clear status bar
+            self.song_download_progress_signal.emit("")
+            self.stem_separation_progress_signal.emit("")
 
     def prepare_singing(self, song_id):
         selected_song = next((s for s in self.all_songs if s["id"] == song_id), None)
@@ -396,7 +231,11 @@ class Controller(QObject):
     def _extract_and_set_reference_pitch(self, song_data):
         try:
             sr_path = song_data["sr_path"]
-            f0_ref, _, _ = self.karaoke_scorer._extract_pitch(sr_path)
+            pitch_path = self.storage.get_pitch_file_path(song_data["id"])
+            
+            # This will load from cache if it exists, or calculate and save if it doesn't
+            # Uses get_pitch_contour which is much faster (doesn't return y, sr)
+            f0_ref = self.karaoke_scorer.get_pitch_contour(sr_path, save_path=pitch_path)
             
             # Replace NaNs with 0.0 to preserve time alignment (index = time)
             # If we just drop NaNs, we lose the timing information.
@@ -460,9 +299,14 @@ class Controller(QObject):
         self.stop_singing() # Ensures recorder and pitch detector also stop
         self.show_message_signal.emit("Song finished. Processing results...")
 
+    def handle_audio_error(self, error_msg):
+        self.show_error_signal.emit(f"Audio Error: {error_msg}\nPlease check your microphone/speaker settings.")
+        self.stop_singing()
+        self.main_window.show_song_list()
+
     def process_recorded_take(self, recorded_take_filepath):
         if not recorded_take_filepath:
-            self.show_error_signal.emit("No audio recorded.")
+            self.show_error_signal.emit("Recording failed or was empty. Please check your microphone settings.")
             self.main_window.show_song_list()
             return
         
@@ -478,8 +322,9 @@ class Controller(QObject):
         try:
             song_id = self.current_song_data["id"]
             sr_path = self.current_song_data["sr_path"]
+            pitch_path = self.storage.get_pitch_file_path(song_id)
 
-            score_data = self.karaoke_scorer.score_performance(recorded_take_filepath, sr_path)
+            score_data = self.karaoke_scorer.score_performance(recorded_take_filepath, sr_path, ref_pitch_cache_path=pitch_path)
             feedback = self.karaoke_scorer.generate_feedback(score_data)
 
             local_score_entry = {

@@ -9,29 +9,25 @@ class KaraokeScorer:
         self.sr = sr
         self.hop_length = hop_length
 
-    def _extract_pitch(self, audio_path):
+    def get_pitch_contour(self, audio_path, save_path=None):
+        # Check for cached pitch
+        if save_path and os.path.exists(save_path):
+            try:
+                f0_interp = np.load(save_path)
+                return f0_interp
+            except Exception as e:
+                print(f"Failed to load cached pitch from {save_path}: {e}")
+
         # Optimize: Load at a lower sample rate (8000 Hz) for faster pitch detection
-        # This significantly reduces the data size and processing time for pyin
         analysis_sr = 8000
         y, sr = librosa.load(audio_path, sr=analysis_sr)
         
-        # Use a slightly larger hop_length relative to the lower SR to keep frames reasonable
-        # 22050 / 512 ~= 43 Hz resolution. 8000 / 192 ~= 41 Hz resolution.
+        # Use a slightly larger hop_length relative to the lower SR
         hop_length_low = int(self.hop_length * (analysis_sr / self.sr))
         if hop_length_low < 64: hop_length_low = 64
 
         # Run pyin on the downsampled audio
         f0, _, _ = librosa.pyin(y, fmin=librosa.note_to_hz('C2'), fmax=librosa.note_to_hz('C7'), sr=sr, hop_length=hop_length_low)
-        
-        # Interpolate f0 back to the original sample rate/hop_length timeline if necessary for exact alignment
-        # But since we compare user vs ref, as long as both are processed this way, it's fine.
-        # However, the scoring logic compares frame-by-frame. We must ensure user and ref have same time grid.
-        # The scorer uses self.hop_length and self.sr. 
-        # If we return a different time grid, scoring will fail or misalign.
-        
-        # To fix alignment without complex interpolation: 
-        # 1. Calculate times for the low-sr frames.
-        # 2. Resample f0 to the expected original timeline (sr=22050, hop=512).
         
         times_low = librosa.times_like(f0, sr=sr, hop_length=hop_length_low)
         times_orig = np.arange(0, len(y)/sr, self.hop_length/self.sr)
@@ -39,20 +35,20 @@ class KaraokeScorer:
         # Interpolate f0 to original timeline
         f0_interp = np.interp(times_orig, times_low, f0, left=np.nan, right=np.nan)
         
-        # Also we need y at original SR for rhythm calculation? 
-        # The _calculate_rhythm_accuracy uses onset detection.
-        # We should probably just reload y at original SR if needed, or accept the low SR y.
-        # _calculate_rhythm_accuracy takes y and sr as args. So we can pass the low SR versions!
-        # But wait, _calculate_pitch_accuracy compares user_f0 and ref_f0.
-        # If we extract both with this method, they will align to times_orig (calculated above).
-        # So we are good!
+        if save_path:
+            try:
+                np.save(save_path, f0_interp)
+            except Exception as e:
+                print(f"Failed to save pitch cache to {save_path}: {e}")
         
-        # We return the interpolated f0 matching the global grid, but the low-sr audio.
-        # This is a compromise. Rhythm detection on 8kHz is "okay" but not perfect.
-        # For better quality, we might reload y at full SR, but that's slow I/O.
-        # Let's return the low SR y and sr. The rhythm function handles its own onset detection.
-        
-        return f0_interp, y, sr
+        return f0_interp
+
+    def load_audio_for_scoring(self, audio_path):
+        # Load audio for rhythm analysis
+        # We use the same analysis SR as before to match the environment
+        analysis_sr = 8000 
+        y, sr = librosa.load(audio_path, sr=analysis_sr)
+        return y, sr
 
     def _quantize_pitch_to_notes(self, f0):
         # Convert frequency to MIDI notes, then to the nearest musical note
@@ -62,31 +58,43 @@ class KaraokeScorer:
         quantized_midi = np.round(valid_midi)
         return quantized_midi
 
-    def _calculate_pitch_accuracy(self, user_f0, ref_f0, tolerance_cents=50):
-        # Align lengths (simple approach: trim to shorter length or interpolate)
+    def _calculate_pitch_accuracy(self, user_f0, ref_f0, tolerance_cents=30):
+        # Align lengths
         min_len = min(len(user_f0), len(ref_f0))
         user_f0_trimmed = user_f0[:min_len]
         ref_f0_trimmed = ref_f0[:min_len]
 
-        # Ignore unvoiced segments (where f0 is NaN or very low) in reference
+        # Ignore unvoiced segments in reference
         valid_indices = ~np.isnan(ref_f0_trimmed) & (ref_f0_trimmed > 0)
         
         if not np.any(valid_indices):
-            return 0.0 # No valid reference pitch to compare against
+            return 0.0
 
         user_f0_valid = user_f0_trimmed[valid_indices]
         ref_f0_valid = ref_f0_trimmed[valid_indices]
 
         if len(user_f0_valid) == 0:
-            return 0.0 # No user pitch in valid reference segments
+            return 0.0
 
         # Convert to cents difference
-        cents_diff = 1200 * np.log2(user_f0_valid / ref_f0_valid)
+        # Handle potential zeros in user_f0 if they slipped through
+        # (though typically we filter them, but let's be safe)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            cents_diff = 1200 * np.log2(user_f0_valid / ref_f0_valid)
         
-        # Calculate accuracy based on tolerance
-        accurate_frames = np.abs(cents_diff) < tolerance_cents
-        score = np.sum(accurate_frames) / len(accurate_frames)
-        return score * 100 # Return as percentage
+        cents_diff = np.abs(cents_diff)
+        
+        # Calculate score with partial credit
+        # Perfect: < tolerance (e.g. 30 cents) -> 1.0
+        # Partial: < 2 * tolerance (e.g. 60 cents) -> 0.5
+        
+        perfect_hits = cents_diff < tolerance_cents
+        partial_hits = (cents_diff >= tolerance_cents) & (cents_diff < (tolerance_cents + 30))
+        
+        score_sum = np.sum(perfect_hits) * 1.0 + np.sum(partial_hits) * 0.5
+        score = score_sum / len(user_f0_valid)
+        
+        return score * 100
 
     def _calculate_rhythm_accuracy(self, user_y, user_sr, ref_y, ref_sr, tolerance_frames=3):
         # Onset detection for both signals
@@ -128,8 +136,10 @@ class KaraokeScorer:
         user_f0_clean = user_f0[~np.isnan(user_f0) & (user_f0 > 0)]
 
         min_frames = int(self.sr * min_duration_sec / self.hop_length)
-        if len(ref_f0_clean) < min_frames or len(user_f0_clean) < min_frames:
-            return 0.0 # Not enough audio to analyze vibrato
+        # Leniency: if track is short, reduce min_frames requirements
+        if len(ref_f0_clean) < min_frames:
+             # If track is very short, we can't judge vibrato well, give neutral
+             return 50.0
 
         # Basic vibrato proxy: standard deviation of pitch within sustained segments
         # This is very crude and would ideally involve more complex signal processing
@@ -142,35 +152,47 @@ class KaraokeScorer:
         if len(stable_segments) == 0:
             return 50.0 # Cannot detect stable segments in reference, neutral score
 
-        # Take a random stable segment from reference for analysis (simplification)
-        # In a real app, iterate through all sustained notes
-        start_idx = stable_segments[0]
-        end_idx = start_idx + int(self.sr * min_duration_sec / self.hop_length)
-        if end_idx >= len(ref_f0_clean):
-            return 50.0 # Segment too short
-
-        ref_segment = ref_f0_clean[start_idx:end_idx]
-        user_segment = user_f0_clean[start_idx:end_idx] # Assume rough alignment
-
-        if len(user_segment) < len(ref_segment):
-            return 50.0 # User segment too short
-
-        # Check for pitch variation in user's segment
-        user_segment_std = np.std(user_segment)
+        # Analyze multiple segments instead of just one random one
+        # Take up to 5 segments
+        num_segments_to_check = 5
+        segment_scores = []
         
-        # Arbitrary scoring based on std dev
-        if user_segment_std > min_vibrato_hz and user_segment_std < max_vibrato_hz:
-            return 100.0 # Good vibrato range
-        elif user_segment_std >= max_vibrato_hz:
-            return 30.0 # Too wide/unstable
-        elif user_segment_std <= min_vibrato_hz and user_segment_std > 0.1:
-            return 70.0 # Some vibrato, but maybe not strong enough
-        else:
-            return 0.0 # No vibrato detected or very flat
+        idxs = np.linspace(0, len(stable_segments) - min_frames - 1, num_segments_to_check, dtype=int)
+        
+        for start_idx in idxs:
+            if start_idx < 0 or start_idx >= len(ref_f0_clean): continue
+            
+            real_start_idx = stable_segments[start_idx]
+            end_idx = real_start_idx + min_frames
+            
+            if end_idx >= len(ref_f0_clean) or end_idx >= len(user_f0_clean):
+                continue
+                
+            user_segment = user_f0_clean[real_start_idx:end_idx]
+            user_segment_std = np.std(user_segment)
 
-    def score_performance(self, user_take_path, reference_sr_path):
-        user_f0, user_y, user_sr = self._extract_pitch(user_take_path)
-        ref_f0, ref_y, ref_sr = self._extract_pitch(reference_sr_path)
+            if user_segment_std > min_vibrato_hz and user_segment_std < max_vibrato_hz:
+                segment_scores.append(100.0)
+            elif user_segment_std >= max_vibrato_hz:
+                segment_scores.append(40.0)
+            elif user_segment_std <= min_vibrato_hz and user_segment_std > 0.1:
+                segment_scores.append(70.0)
+            else:
+                segment_scores.append(20.0)
+        
+        if not segment_scores:
+            return 50.0
+            
+        return sum(segment_scores) / len(segment_scores)
+
+    def score_performance(self, user_take_path, reference_sr_path, ref_pitch_cache_path=None):
+        # Extract pitch contours
+        user_f0 = self.get_pitch_contour(user_take_path)
+        ref_f0 = self.get_pitch_contour(reference_sr_path, save_path=ref_pitch_cache_path)
+        
+        # Load audio for rhythm analysis
+        user_y, user_sr = self.load_audio_for_scoring(user_take_path)
+        ref_y, ref_sr = self.load_audio_for_scoring(reference_sr_path)
 
         # Pitch Accuracy
         pitch_score = self._calculate_pitch_accuracy(user_f0, ref_f0)

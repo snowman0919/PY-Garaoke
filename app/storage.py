@@ -57,6 +57,9 @@ class StorageManager:
     def get_stem_file_path(self, song_id, stem_type): # stem_type: 'mr' or 'sr'
         return os.path.join(self.stems_dir, f"{song_id}_{stem_type}.wav")
 
+    def get_pitch_file_path(self, song_id):
+        return os.path.join(self.stems_dir, f"{song_id}_pitch.npy")
+
     def get_take_file_path(self, song_id, nickname):
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         return os.path.join(self.takes_dir, f"{song_id}_{timestamp}_{nickname}.wav")

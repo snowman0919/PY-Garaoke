@@ -8,7 +8,6 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QPainter, QBrush, QColor, QFontMetrics, QFont
 import numpy as np
-import librosa
 
 class NicknameDialog(QDialog):
     nickname_set = Signal(str)
@@ -126,12 +125,14 @@ class SingingWidget(QWidget):
     
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setObjectName("SingingWidget") # For styling
         self.layout = QVBoxLayout(self)
-        self.setContentsMargins(0, 0, 0, 0)
+        self.setContentsMargins(20, 20, 20, 20)
 
         # Top bar for real-time score
         self.score_bar_layout = QHBoxLayout()
         self.current_score_label = QLabel("Score: 0")
+        self.current_score_label.setObjectName("ScoreLabel")
         self.current_score_label.setAlignment(Qt.AlignCenter)
         self.current_score_label.setFont(QFont("Arial", 24))
         self.score_bar_layout.addWidget(self.current_score_label)
@@ -143,18 +144,21 @@ class SingingWidget(QWidget):
 
         # Lyrics display
         self.lyrics_label = QLabel("Ready to sing...")
+        self.lyrics_label.setObjectName("LyricsLabel")
         self.lyrics_label.setAlignment(Qt.AlignCenter)
-        self.lyrics_label.setFont(QFont("Arial", 18))
+        self.lyrics_label.setFont(QFont("Arial", 28, QFont.Bold))
+        self.lyrics_label.setWordWrap(True)
         self.layout.addWidget(self.lyrics_label)
 
         # Progress bar and controls
         self.progress_layout = QHBoxLayout()
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 1000)
-        self.progress_bar.setTextVisible(True)
+        self.progress_bar.setTextVisible(False) # Cleaner look
         self.progress_layout.addWidget(self.progress_bar)
 
         self.stop_button = QPushButton("Stop Singing")
+        self.stop_button.setCursor(Qt.PointingHandCursor)
         self.stop_button.clicked.connect(self.stop_singing_requested.emit)
         self.progress_layout.addWidget(self.stop_button)
         self.layout.addLayout(self.progress_layout)
@@ -173,7 +177,13 @@ class SingingWidget(QWidget):
         self.pitch_lane.update_playback_cursor(current_time_sec)
 
     def update_lyrics(self, lyric_text):
-        self.lyrics_label.setText(lyric_text)
+        if lyric_text:
+            self.lyrics_label.setText(lyric_text)
+        else:
+            # Optional: Keep previous lyric or show ellipsis?
+            # For now, let's keep it blank if strictly empty, or maybe "..."
+            # But usually karaoke holds the last line until the next one.
+            pass 
 
     def update_score(self, current_score):
         self.current_score_label.setText(f"Score: {current_score:.0f}")
@@ -193,6 +203,9 @@ class PitchVisualizationWidget(QWidget):
         self.total_duration = 1.0 
         self.playback_cursor_time = 0.0
         
+        # Smoothing state
+        self.smoothed_pitch = 0.0
+
         # Default audio parameters (should match Scoring/Analysis defaults)
         self.sr = 22050
         self.hop_length = 512
@@ -200,8 +213,9 @@ class PitchVisualizationWidget(QWidget):
 
         # Visualization parameters
         self.visible_window = 10.0 # seconds
-        self.pitch_min = librosa.note_to_hz('C2')
-        self.pitch_max = librosa.note_to_hz('C6') # Adjusted range for typical vocals
+        # C2 ~= 65.41 Hz, C6 ~= 1046.50 Hz
+        self.pitch_min = 65.41
+        self.pitch_max = 1046.50
         self.pitch_range_log = np.log2(self.pitch_max) - np.log2(self.pitch_min)
 
         self.setMouseTracking(True) 
@@ -213,14 +227,29 @@ class PitchVisualizationWidget(QWidget):
         self.hop_length = hop_length
         self.frame_duration = self.hop_length / self.sr
         self.user_pitch_points = []
+        self.smoothed_pitch = 0.0
         self.update()
 
     def update_user_pitch(self, pitch_hz):
+        # Exponential Moving Average for smoothing
+        alpha = 0.6 # 0.6 new, 0.4 old. Higher = more responsive, Lower = smoother
+        
         if pitch_hz > 0:
-            self.user_pitch_points.append((self.playback_cursor_time, pitch_hz))
+            if self.smoothed_pitch <= 0:
+                self.smoothed_pitch = pitch_hz
+            else:
+                # Avoid smoothing across large jumps (octave errors or new notes)
+                if abs(pitch_hz - self.smoothed_pitch) > 50: # > 50Hz jump
+                     self.smoothed_pitch = pitch_hz # Snap to new note
+                else:
+                     self.smoothed_pitch = (self.smoothed_pitch * (1 - alpha)) + (pitch_hz * alpha)
+        else:
+            self.smoothed_pitch = 0.0
+
+        if self.smoothed_pitch > 0:
+            self.user_pitch_points.append((self.playback_cursor_time, self.smoothed_pitch))
             
-            # Prune old points to keep memory usage low, but keep enough for history
-            # Keep points within the last 'visible_window' + some buffer
+            # Prune old points
             min_time = self.playback_cursor_time - self.visible_window
             while self.user_pitch_points and self.user_pitch_points[0][0] < min_time:
                 self.user_pitch_points.pop(0)
@@ -336,6 +365,7 @@ class ResultsWidget(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setObjectName("ResultsWidget")
         self.layout = QVBoxLayout(self)
         self.setContentsMargins(20, 20, 20, 20)
 
