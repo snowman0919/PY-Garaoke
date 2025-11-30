@@ -5,26 +5,23 @@ from unittest.mock import patch, mock_open
 from app.storage import StorageManager
 
 class TestStorageManager(unittest.TestCase):
+
     def setUp(self):
         self.base_path = "./test_data"
         self.storage_manager = StorageManager(base_path=self.base_path)
-        
-        # Ensure test directories are clean before each test
         if os.path.exists(self.base_path):
             import shutil
+
             shutil.rmtree(self.base_path)
-        
-        # Re-initialize to ensure directories are created
         self.storage_manager = StorageManager(base_path=self.base_path)
 
     def tearDown(self):
-        # Clean up test directories after each test
         if os.path.exists(self.base_path):
             import shutil
+
             shutil.rmtree(self.base_path)
 
     def test_ensure_dirs_exist(self):
-        # Directories should be created during __init__
         self.assertTrue(os.path.exists(self.storage_manager.songs_dir))
         self.assertTrue(os.path.exists(self.storage_manager.stems_dir))
         self.assertTrue(os.path.exists(self.storage_manager.takes_dir))
@@ -37,11 +34,9 @@ class TestStorageManager(unittest.TestCase):
         self.assertFalse(loaded_config["first_run"])
 
     def test_get_or_create_config_new(self):
-        # Delete config file if it exists to simulate first run
         if os.path.exists(self.storage_manager.config_file):
             os.remove(self.storage_manager.config_file)
-        
-        config = self.storage_manager.load_config() # Should create default
+        config = self.storage_manager.load_config()
         self.assertIsNotNone(config)
         self.assertEqual(config["nickname"], None)
         self.assertTrue(config["first_run"])
@@ -66,33 +61,25 @@ class TestStorageManager(unittest.TestCase):
         nickname = "TestNick"
         self.assertEqual(self.storage_manager.get_song_file_path(song_id), os.path.join(self.base_path, "data/songs", "test_song_id.wav"))
         self.assertEqual(self.storage_manager.get_stem_file_path(song_id, "mr"), os.path.join(self.base_path, "data/stems", "test_song_id_mr.wav"))
-        
         take_path = self.storage_manager.get_take_file_path(song_id, nickname)
         self.assertTrue(f"{song_id}_" in take_path)
         self.assertTrue(f"_{nickname}.wav" in take_path)
         self.assertTrue(os.path.exists(os.path.dirname(take_path)))
 
     def test_load_scores_with_corrupt_dict_file(self):
-        # Simulate a corrupt scores.json containing a dict {}
         scores_file = self.storage_manager.scores_file
         with open(scores_file, "w", encoding="utf-8") as f:
             json.dump({}, f)
-            
-        # Attempt to load scores. Should return [] instead of {}
         scores = self.storage_manager.load_scores()
         self.assertIsInstance(scores, list)
         self.assertEqual(scores, [])
 
     def test_load_songs_with_corrupt_dict_file(self):
-        # Simulate a corrupt songs_metadata.json containing a dict {}
         songs_file = os.path.join(self.storage_manager.data_dir, "songs_metadata.json")
         with open(songs_file, "w", encoding="utf-8") as f:
             json.dump({}, f)
-            
-        # Attempt to load songs. Should return [] instead of {}
         songs = self.storage_manager.load_songs()
         self.assertIsInstance(songs, list)
         self.assertEqual(songs, [])
-
 if __name__ == "__main__":
     unittest.main()

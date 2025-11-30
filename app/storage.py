@@ -3,6 +3,7 @@ import os
 from datetime import datetime
 
 class StorageManager:
+
     def __init__(self, base_path="."):
         self.base_path = base_path
         self.data_dir = os.path.join(self.base_path, "data")
@@ -11,7 +12,6 @@ class StorageManager:
         self.takes_dir = os.path.join(self.data_dir, "takes")
         self.scores_file = os.path.join(self.data_dir, "scores.json")
         self.config_file = os.path.join(self.data_dir, "config.json")
-
         self._ensure_dirs_exist()
 
     def _ensure_dirs_exist(self):
@@ -60,7 +60,7 @@ class StorageManager:
     def get_song_file_path(self, song_id):
         return os.path.join(self.songs_dir, f"{song_id}.wav")
 
-    def get_stem_file_path(self, song_id, stem_type): # stem_type: 'mr' or 'sr'
+    def get_stem_file_path(self, song_id, stem_type):
         return os.path.join(self.stems_dir, f"{song_id}_{stem_type}.wav")
 
     def get_pitch_file_path(self, song_id):
@@ -69,4 +69,3 @@ class StorageManager:
     def get_take_file_path(self, song_id, nickname):
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         return os.path.join(self.takes_dir, f"{song_id}_{timestamp}_{nickname}.wav")
-

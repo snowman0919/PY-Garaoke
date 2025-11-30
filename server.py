@@ -7,7 +7,6 @@ from datetime import datetime
 from typing import List, Optional
 
 DATABASE_URL = "sqlite:///./karaoke_ranks.db"
-
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
@@ -22,7 +21,6 @@ class DBScore(Base):
     rhythm = Column(Float)
     vibrato = Column(Float)
     timestamp = Column(DateTime, default=func.now())
-
 Base.metadata.create_all(bind=engine)
 
 class ScoreBase(BaseModel):
@@ -57,6 +55,7 @@ def get_db():
         db.close()
 
 @app.post("/api/submit_score", response_model=ScoreResponse)
+
 def submit_score(score_data: ScoreCreate, db: Session = Depends(get_db)):
     db_score = DBScore(**score_data.model_dump())
     db.add(db_score)
@@ -65,8 +64,7 @@ def submit_score(score_data: ScoreCreate, db: Session = Depends(get_db)):
     return db_score
 
 @app.get("/api/top_scores", response_model=List[ScoreResponse])
+
 def get_top_scores(song_id: str, limit: int = 10, db: Session = Depends(get_db)):
     scores = db.query(DBScore).filter(DBScore.song_id == song_id).order_by(DBScore.score.desc()).limit(limit).all()
     return scores
-
-# To run the server: uvicorn server:app --reload --port 8000

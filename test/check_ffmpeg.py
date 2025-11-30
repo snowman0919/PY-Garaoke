@@ -4,8 +4,6 @@ import os
 
 def check_ffmpeg():
     print("Checking for ffmpeg...")
-    
-    # Check in PATH
     ffmpeg_path = shutil.which("ffmpeg")
     if ffmpeg_path:
         print(f"SUCCESS: ffmpeg found at: {ffmpeg_path}")
@@ -19,11 +17,10 @@ def check_ffmpeg():
         print("FAIL: ffmpeg not found in PATH.")
         print("Please ensure ffmpeg is installed and added to your system PATH.")
         print("If you just installed it, you might need to restart your terminal/IDE.")
-        
-    # Check pydub
     try:
         from pydub import AudioSegment
         from pydub.utils import which
+
         print("\nChecking pydub configuration...")
         pydub_ffmpeg = which("ffmpeg")
         if pydub_ffmpeg:
@@ -32,6 +29,5 @@ def check_ffmpeg():
              print("FAIL: pydub could not find ffmpeg.")
     except ImportError:
         print("WARNING: pydub not installed.")
-
 if __name__ == "__main__":
     check_ffmpeg()
