@@ -1,9 +1,6 @@
 import os
 
 def get_stylesheet():
-    """
-    Returns a modern Glassmorphism/Neumorphism inspired QSS stylesheet.
-    """
     bg_color = "#1e1e2e"
     surface_color = "rgba(255, 255, 255, 0.08)"
     text_color = "#cdd6f4"
