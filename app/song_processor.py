@@ -69,43 +69,47 @@ class SongProcessor:
             'noplaylist': True,
             'default_search': 'ytsearch',
         }
-        ydl_opts_subs_all = ydl_opts_base.copy()
-        ydl_opts_subs_all.update({
-            'writesub': True,
-            'writeautomaticsub': True,
-            'subtitleslangs': ['ko', 'en'],
-            'skip_download': False,
+        
+        ydl_opts_audio = ydl_opts_base.copy()
+        ydl_opts_audio.update({
+            'writesub': False,
+            'writeautomaticsub': False,
         })
 
-        ydl_opts_no_subs = ydl_opts_base.copy()
+        ydl_opts_manual_subs = ydl_opts_base.copy()
+        ydl_opts_manual_subs.update({
+            'writesub': True,
+            'writeautomaticsub': False, 
+            'subtitleslangs': ['all', '-live_chat'], 
+            'skip_download': True,
+        })
+
+        ydl_opts_no_subs = ydl_opts_audio.copy()
         if not url_or_query.startswith(("http://", "https://")):
             url_or_query = f"ytsearch1:{url_or_query}"
+        
         info_dict = None
+        
         try:
-            with yt_dlp.YoutubeDL(ydl_opts_subs_all) as ydl:
+            with yt_dlp.YoutubeDL(ydl_opts_audio) as ydl:
                 info_dict = ydl.extract_info(url_or_query, download=True)
-
         except yt_dlp.utils.DownloadError as e:
-            error_msg = str(e)
-            partial_subs = [f for f in os.listdir(output_dir) if f.startswith(song_id) and f.endswith('.vtt')]
-            if partial_subs:
-                 print(f"Note: Some subtitles downloaded ({len(partial_subs)}) despite error. Proceeding with fallback to ensure audio...")
-            if '429' in error_msg or 'subtitle' in error_msg.lower() or 'HTTP Error 429' in error_msg:
-                if progress_callback:
-                    if not partial_subs:
-                        progress_callback("Subtitle download limit (429). Retrying audio only...")
-                    else:
-                        progress_callback("Refining download...")
-                if not partial_subs:
-                    print(f"Subtitle download failed. Retrying audio only: {e}")
-                time.sleep(1)
-                with yt_dlp.YoutubeDL(ydl_opts_no_subs) as ydl:
-                    info_dict = ydl.extract_info(url_or_query, download=True)
-            else:
-                raise e
+            print(f"Audio download failed: {e}")
+            raise e
+
+        try:
+            if progress_callback: progress_callback("수동 자막 검색 중...")
+            with yt_dlp.YoutubeDL(ydl_opts_manual_subs) as ydl:
+                ydl.extract_info(url_or_query, download=True)
+        except Exception as e:
+            print(f"Manual subtitle download error: {e}")
+
+        downloaded_subs = [f for f in os.listdir(output_dir) if f.startswith(song_id) and f.endswith('.vtt') and '.ko' in f]
+        
         if 'entries' in info_dict:
             if not info_dict['entries']: raise Exception("No search results found.")
             info_dict = info_dict['entries'][0]
+        
         downloaded_file = os.path.join(output_dir, f"{song_id}.wav")
         if not os.path.exists(downloaded_file):
             files = os.listdir(output_dir)
@@ -119,6 +123,7 @@ class SongProcessor:
                     AudioSegment.from_file(src).set_channels(2).export(downloaded_file, format="wav")
                 else:
                     raise FileNotFoundError(f"Downloaded audio not found for {song_id}")
+        
         for f in os.listdir(output_dir):
             if f.startswith(song_id) and (f.endswith(".mhtml") or f.endswith(".webm")):
                 try:
@@ -165,21 +170,48 @@ class SongProcessor:
             AudioSegment.silent(duration=10000).export(mr_path, format="wav")
 
     def _process_subtitles(self, output_dir, song_id, lrc_path):
-        all_ko_candidates = [f for f in os.listdir(output_dir) if f.startswith(song_id) and f.endswith(('.vtt', '.srt')) and '.ko.' in f]
+        all_ko_candidates = [f for f in os.listdir(output_dir) if f.startswith(song_id) and f.endswith(('.vtt', '.srt')) and '.ko' in f]
         
-        manual_subs = [f for f in all_ko_candidates if '.autoc.' not in f]
-        auto_subs = [f for f in all_ko_candidates if '.autoc.' in f]
+        manual_subs_by_content = []
+        auto_subs_by_content = []
+
+        for candidate_file_name in all_ko_candidates:
+            full_path = os.path.join(output_dir, candidate_file_name)
+            if self._is_auto_subtitle_content(full_path):
+                auto_subs_by_content.append(candidate_file_name)
+            else:
+                manual_subs_by_content.append(candidate_file_name)
 
         sub_file_to_use = None
-        if manual_subs:
-            sub_file_to_use = manual_subs[0]
-        elif auto_subs:
-            sub_file_to_use = auto_subs[0]
+        
+        if manual_subs_by_content:
+            manual_subs_by_content.sort(key=len)
+            sub_file_to_use = manual_subs_by_content[0]
 
         if not sub_file_to_use:
             return
 
         self._convert_subs_to_lrc(os.path.join(output_dir, sub_file_to_use), lrc_path)
+
+    def _is_auto_subtitle_content(self, file_path):
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read(4096)
+            
+            if re.search(r'<c(\.[^>]+)?>', content):
+                return True
+            
+            if re.search(r'position:\d+%|align:[a-z]+|line:\d+,\d+', content):
+                return True
+
+            if re.search(r'NOTE .*auto-generated', content, re.IGNORECASE):
+                return True
+            
+            return False
+        except Exception as e:
+            print(f"Error checking subtitle content for auto-detection in {file_path}: {e}")
+            return False
+
 
     def _convert_subs_to_lrc(self, sub_path, lrc_path):
         time_pattern = re.compile(r'(\d{2}):(\d{2}):(\d{2})[.,](\d{3})')

@@ -110,47 +110,27 @@ class Controller(QObject):
     def show_add_song_dialog(self):
         self.main_window.add_song_dialog.open()
 
-        def add_song_from_youtube(self, url_or_query, song_title_hint):
+    def add_song_from_youtube(self, url_or_query, song_title_hint):
+        self.show_message_signal.emit(f"노래 추가 중: {url_or_query}...")
+        thread_pool.submit(self._download_and_separate_song, url_or_query)
 
-            self.show_message_signal.emit(f"노래 추가 중: {url_or_query}...")
-
-            thread_pool.submit(self._download_and_separate_song, url_or_query)
-
-    
-
-        def _download_and_separate_song(self, url_or_query):
-
-            def progress_cb(msg):
-
-                self.song_download_progress_signal.emit(msg)
-
-            try:
-
-                song_metadata = self.song_processor.process_song(
-
-                    url_or_query,
-
-                    progress_callback=progress_cb
-
-                )
-
-                self.all_songs.append(song_metadata)
-
-                self.storage.save_songs(self.all_songs)
-
-                self.update_song_list_signal.emit(self.all_songs)
-
-                self.show_message_signal.emit(f"노래 '{song_metadata['title']}'이(가) 추가 및 처리되었습니다!")
-
-            except Exception as e:
-
-                self.show_error_signal.emit(f"노래 추가 중 오류 발생: {e}")
-
-            finally:
-
-                self.song_download_progress_signal.emit("")
-
-                self.stem_separation_progress_signal.emit("")
+    def _download_and_separate_song(self, url_or_query):
+        def progress_cb(msg):
+            self.song_download_progress_signal.emit(msg)
+        try:
+            song_metadata = self.song_processor.process_song(
+                url_or_query,
+                progress_callback=progress_cb
+            )
+            self.all_songs.append(song_metadata)
+            self.storage.save_songs(self.all_songs)
+            self.update_song_list_signal.emit(self.all_songs)
+            self.show_message_signal.emit(f"노래 '{song_metadata['title']}'이(가) 추가 및 처리되었습니다!")
+        except Exception as e:
+            self.show_error_signal.emit(f"노래 추가 중 오류 발생: {e}")
+        finally:
+            self.song_download_progress_signal.emit("")
+            self.stem_separation_progress_signal.emit("")
 
     def prepare_singing(self, song_id):
         selected_song = next((s for s in self.all_songs if s["id"] == song_id), None)
