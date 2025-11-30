@@ -55,7 +55,6 @@ class SongProcessor:
             raise e
 
     def _download_youtube(self, url_or_query, song_id, output_dir, progress_callback):
-        # 0. Resolve URL first to ensure consistency
         ydl_opts_info = {
             'quiet': True,
             'no_warnings': True,
@@ -85,12 +84,12 @@ class SongProcessor:
         if not webpage_url:
             webpage_url = url_or_query
 
-        # 1. Download Manual Subtitles (Standalone Step)
         ydl_opts_subs = {
-            'skip_download': True,       # Only download metadata/subs
-            'writesub': True,            # Write subtitle file
-            'writeautomaticsub': False,  # NO auto-generated subs
-            'subtitleslangs': ['all'],   # Get all manual languages
+            'skip_download': True,
+            'writesubtitles': True,
+            'writeautomaticsub': False,
+            'subtitleslangs': ['ko', 'en', 'jp'],
+            'subtitlesformat': 'vtt',
             'outtmpl': os.path.join(output_dir, f"{song_id}.%(ext)s"),
             'quiet': True,
             'no_warnings': True,
@@ -104,7 +103,6 @@ class SongProcessor:
         except Exception as e:
             print(f"Subtitle download step error: {e}")
 
-        # 2. Download Audio (Standalone Step)
         ydl_opts_audio = {
             'format': 'bestaudio/best',
             'postprocessors': [{
@@ -117,7 +115,7 @@ class SongProcessor:
             'quiet': False,
             'no_warnings': True,
             'noplaylist': True,
-            'writesub': False, # Handled in step 1
+            'writesub': False,
         }
         
         try:
@@ -130,13 +128,11 @@ class SongProcessor:
         
         downloaded_file = os.path.join(output_dir, f"{song_id}.wav")
         if not os.path.exists(downloaded_file):
-            # Fallback: find whatever audio file was created and convert/rename
             files = os.listdir(output_dir)
             candidates = [f for f in files if f.startswith(song_id) and f.endswith('.wav')]
             if candidates:
                 os.rename(os.path.join(output_dir, candidates[0]), downloaded_file)
             else:
-                # Look for non-wav audio
                 candidates = [f for f in files if f.startswith(song_id) and os.path.splitext(f)[1] in ['.webm', '.m4a', '.mp3']]
                 if candidates:
                     src = os.path.join(output_dir, candidates[0])
@@ -144,7 +140,6 @@ class SongProcessor:
                 else:
                     raise FileNotFoundError(f"Downloaded audio not found for {song_id}")
         
-        # Cleanup temporary video files (but KEEP subtitles)
         for f in os.listdir(output_dir):
             if f.startswith(song_id):
                 if f.endswith((".mhtml", ".webm", ".mp4", ".json")): 
@@ -192,8 +187,6 @@ class SongProcessor:
             AudioSegment.silent(duration=10000).export(mr_path, format="wav")
 
     def _process_subtitles(self, output_dir, song_id, lrc_path):
-        # Look for any subtitle file downloaded by yt-dlp containing 'ko'
-        # Matches: .ko.vtt, .ko-KR.vtt, .ko.srt, etc.
         candidates = []
         for f in os.listdir(output_dir):
             if f.startswith(song_id) and f.endswith(('.vtt', '.srt')):
