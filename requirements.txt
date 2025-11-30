@@ -1,65 +1,63 @@
-PySide6==6.6.1
+PySide6>=6.6.1
 yt-dlp>=2025.01.01
 demucs-infer==4.1.0
-torch==2.1.0 # Keep existing version
-torchaudio==2.1.0 # Keep existing version
-sounddevice==0.4.6
-numpy==1.26.2
-librosa==0.10.1
-fastapi==0.104.1
-uvicorn==0.24.0.post1
-python-multipart==0.0.6
-SQLAlchemy==2.0.23
-pydub==0.25.1
-resampy==0.4.2 # Required by librosa
-scipy==1.11.4 # Required by librosa and sounddevice
-soundfile==0.12.1 # Required by sounddevice and librosa
-typing_extensions==4.9.0 # Required by fastapi
-mutagen==1.47.0 # Required by pydub
-packaging==23.2 # Required by demucs
-omegaconf==2.3.0 # Required by demucs
-auralib==0.0.4
-future==0.18.3 # Required by pydub
-colorama==0.4.6 # Required by youtube-dl
-tqdm==4.66.1 # Required by youtube-dl
-platformdirs==4.1.0 # Required by demucs
-lazy_loader==0.3 # Required by demucs
-audioread==3.0.0 # Required by librosa
-lxml==4.9.4 # Required by youtube-dl
-json5==0.9.14 # Required by youtube-dl
-ffmpeg-python==0.2.0 # Required for pydub to convert between formats
-tabulate==0.9.0 # Required by demucs
-ftfy==6.1.1 # Required by youtube-dl
-jsonschema==4.20.0 # Required by youtube-dl
-send2trash==1.8.2 # Required by youtube-dl
-miniaudio==1.61 # Required by demucs
-psutil==5.9.6 # Required by demucs
-trio==0.23.1 # Required by demucs
-torchaudio==2.1.0 # Required by demucs
-torch==2.1.0 # Required by demucs
-einops==0.7.0 # Required by demucs
-julius==0.2.7 # Required by demucs
-openunmix==1.3.0 # Required by demucs (sometimes an alternative to demucs)
-pandas==2.1.4 # Required by demucs
-joblib==1.3.2 # Required by demucs
-matplotlib==3.8.2 # Optional, but common for plotting audio data. Not strictly needed for app but good for dev.
-appdirs==1.4.4 # Required by demucs
-certifi==2023.11.17 # Common dependency for secure connections
-charset-normalizer==3.3.2 # Common dependency
-idna==3.6 # Common dependency
-requests==2.31.0 # Common dependency
-urllib3==2.1.0 # Common dependency
-h11==0.14.0 # Related to uvicorn
-httpcore==1.0.2 # Related to fastapi/uvicorn
-httpx==0.25.2 # Related to fastapi/uvicorn
-sniffio==1.3.0 # Related to fastapi/uvicorn
-starlette>=0.27.0,<0.28.0 # Required by fastapi
-watchfiles==0.21.0 # Recommended for fastapi development
-websockets==11.0.3 # Related to fastapi/uvicorn
-greenlet==3.0.1 # Required by SQLAlchemy
-Mako==1.3.0 # Required by SQLAlchemy
-MarkupSafe==2.1.3 # Required by SQLAlchemy
-exceptiongroup==1.2.0 # Required by uvicorn
-pydantic==2.5.2 # Required by fastapi
-pydantic_core==2.14.5 # Required by fastapi
-anyio>=3.7.1,<4.0.0 # Required by fastapi
+torch>=2.2.0
+torchaudio>=2.2.0
+sounddevice>=0.4.6
+numpy>=1.26.0
+librosa>=0.10.1
+fastapi>=0.104.1
+uvicorn>=0.24.0
+python-multipart>=0.0.6
+SQLAlchemy>=2.0.23
+pydub>=0.25.1
+resampy>=0.4.2
+scipy>=1.11.4
+soundfile>=0.12.1
+typing_extensions>=4.9.0
+mutagen>=1.47.0
+packaging>=23.2
+omegaconf>=2.3.0
+auralib>=0.0.4
+future>=0.18.3
+colorama>=0.4.6
+tqdm>=4.66.1
+platformdirs>=4.1.0
+lazy_loader>=0.3
+audioread>=3.0.0
+lxml>=4.9.4
+json5>=0.9.14
+ffmpeg-python>=0.2.0
+tabulate>=0.9.0
+ftfy>=6.1.1
+jsonschema>=4.20.0
+send2trash>=1.8.2
+miniaudio>=1.61
+psutil>=5.9.6
+trio>=0.23.1
+einops>=0.7.0
+julius>=0.2.7
+openunmix>=1.3.0
+pandas>=2.1.4
+joblib>=1.3.2
+matplotlib>=3.8.2
+appdirs>=1.4.4
+certifi>=2023.11.17
+charset-normalizer>=3.3.2
+idna>=3.6
+requests>=2.31.0
+urllib3>=2.1.0
+h11>=0.14.0
+httpcore>=1.0.2
+httpx>=0.25.2
+sniffio>=1.3.0
+starlette>=0.27.0
+watchfiles>=0.21.0
+websockets>=11.0.3
+greenlet>=3.0.1
+Mako>=1.3.0
+MarkupSafe>=2.1.3
+exceptiongroup>=1.2.0
+pydantic>=2.5.2
+pydantic_core>=2.14.5
+anyio>=3.7.1

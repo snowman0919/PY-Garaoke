@@ -55,8 +55,57 @@ class SongProcessor:
             raise e
 
     def _download_youtube(self, url_or_query, song_id, output_dir, progress_callback):
-        # Combined Audio and Manual Subtitle Download Options
-        ydl_opts = {
+        # 0. Resolve URL first to ensure consistency
+        ydl_opts_info = {
+            'quiet': True,
+            'no_warnings': True,
+            'noplaylist': True,
+            'default_search': 'ytsearch',
+        }
+        
+        if not url_or_query.startswith(("http://", "https://")):
+            url_or_query = f"ytsearch1:{url_or_query}"
+
+        info_dict = None
+        webpage_url = None
+        
+        try:
+            if progress_callback: progress_callback("영상 정보 검색 중...")
+            with yt_dlp.YoutubeDL(ydl_opts_info) as ydl:
+                info_dict = ydl.extract_info(url_or_query, download=False)
+                
+            if 'entries' in info_dict:
+                if not info_dict['entries']: raise Exception("No search results found.")
+                info_dict = info_dict['entries'][0]
+            
+            webpage_url = info_dict.get('webpage_url')
+        except Exception as e:
+            raise Exception(f"Video search failed: {e}")
+
+        if not webpage_url:
+            webpage_url = url_or_query
+
+        # 1. Download Manual Subtitles (Standalone Step)
+        ydl_opts_subs = {
+            'skip_download': True,       # Only download metadata/subs
+            'writesub': True,            # Write subtitle file
+            'writeautomaticsub': False,  # NO auto-generated subs
+            'subtitleslangs': ['all'],   # Get all manual languages
+            'outtmpl': os.path.join(output_dir, f"{song_id}.%(ext)s"),
+            'quiet': True,
+            'no_warnings': True,
+            'noplaylist': True,
+        }
+
+        try:
+            if progress_callback: progress_callback("수동 자막 다운로드 시도 중...")
+            with yt_dlp.YoutubeDL(ydl_opts_subs) as ydl:
+                ydl.download([webpage_url])
+        except Exception as e:
+            print(f"Subtitle download step error: {e}")
+
+        # 2. Download Audio (Standalone Step)
+        ydl_opts_audio = {
             'format': 'bestaudio/best',
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
@@ -68,31 +117,16 @@ class SongProcessor:
             'quiet': False,
             'no_warnings': True,
             'noplaylist': True,
-            'default_search': 'ytsearch',
-            
-            # Subtitle Options
-            'writesub': True,              # Download manual subtitles
-            'writeautomaticsub': False,    # NO auto-generated subtitles
-            'subtitleslangs': ['all'],     # Download all available manual languages to ensure we catch 'ko', 'ko-KR', etc.
+            'writesub': False, # Handled in step 1
         }
-
-        if not url_or_query.startswith(("http://", "https://")):
-            url_or_query = f"ytsearch1:{url_or_query}"
         
-        info_dict = None
-        
-        # Single Step: Download Audio AND Subtitles
         try:
-            if progress_callback: progress_callback("콘텐츠 다운로드 중 (오디오 및 자막)...")
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info_dict = ydl.extract_info(url_or_query, download=True)
+            if progress_callback: progress_callback("오디오 다운로드 중...")
+            with yt_dlp.YoutubeDL(ydl_opts_audio) as ydl:
+                ydl.download([webpage_url])
         except yt_dlp.utils.DownloadError as e:
-            print(f"Download failed: {e}")
+            print(f"Audio download failed: {e}")
             raise e
-
-        if 'entries' in info_dict:
-            if not info_dict['entries']: raise Exception("No search results found.")
-            info_dict = info_dict['entries'][0]
         
         downloaded_file = os.path.join(output_dir, f"{song_id}.wav")
         if not os.path.exists(downloaded_file):
@@ -113,7 +147,6 @@ class SongProcessor:
         # Cleanup temporary video files (but KEEP subtitles)
         for f in os.listdir(output_dir):
             if f.startswith(song_id):
-                # Remove intermediate video files or metadata, but preserve .wav and subtitle files (.vtt, .srt)
                 if f.endswith((".mhtml", ".webm", ".mp4", ".json")): 
                     try:
                         os.remove(os.path.join(output_dir, f))
