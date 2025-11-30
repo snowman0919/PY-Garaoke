@@ -72,5 +72,27 @@ class TestStorageManager(unittest.TestCase):
         self.assertTrue(f"_{nickname}.wav" in take_path)
         self.assertTrue(os.path.exists(os.path.dirname(take_path)))
 
+    def test_load_scores_with_corrupt_dict_file(self):
+        # Simulate a corrupt scores.json containing a dict {}
+        scores_file = self.storage_manager.scores_file
+        with open(scores_file, "w", encoding="utf-8") as f:
+            json.dump({}, f)
+            
+        # Attempt to load scores. Should return [] instead of {}
+        scores = self.storage_manager.load_scores()
+        self.assertIsInstance(scores, list)
+        self.assertEqual(scores, [])
+
+    def test_load_songs_with_corrupt_dict_file(self):
+        # Simulate a corrupt songs_metadata.json containing a dict {}
+        songs_file = os.path.join(self.storage_manager.data_dir, "songs_metadata.json")
+        with open(songs_file, "w", encoding="utf-8") as f:
+            json.dump({}, f)
+            
+        # Attempt to load songs. Should return [] instead of {}
+        songs = self.storage_manager.load_songs()
+        self.assertIsInstance(songs, list)
+        self.assertEqual(songs, [])
+
 if __name__ == "__main__":
     unittest.main()

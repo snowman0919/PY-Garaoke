@@ -40,13 +40,19 @@ class StorageManager:
         self._save_json(self.config_file, config)
 
     def load_songs(self):
-        return self._load_json(os.path.join(self.data_dir, "songs_metadata.json"), [])
+        data = self._load_json(os.path.join(self.data_dir, "songs_metadata.json"), [])
+        if not isinstance(data, list):
+            return []
+        return data
 
     def save_songs(self, songs):
         self._save_json(os.path.join(self.data_dir, "songs_metadata.json"), songs)
 
     def load_scores(self):
-        return self._load_json(self.scores_file, [])
+        data = self._load_json(self.scores_file, [])
+        if not isinstance(data, list):
+            return []
+        return data
 
     def save_scores(self, scores):
         self._save_json(self.scores_file, scores)

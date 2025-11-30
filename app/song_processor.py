@@ -108,9 +108,22 @@ class SongProcessor:
                 info_dict = ydl.extract_info(url_or_query, download=True)
         except yt_dlp.utils.DownloadError as e:
             error_msg = str(e)
+            
+            # Check for partial subtitle success
+            partial_subs = [f for f in os.listdir(output_dir) if f.startswith(song_id) and f.endswith('.vtt')]
+            if partial_subs:
+                 print(f"Note: Some subtitles downloaded ({len(partial_subs)}) despite error. Proceeding with fallback to ensure audio...")
+            
             if '429' in error_msg or 'subtitle' in error_msg.lower() or 'HTTP Error 429' in error_msg:
-                if progress_callback: progress_callback("Subtitle download limit (429). Retrying audio only...")
-                print(f"Subtitle download failed. Retrying audio only: {e}")
+                if progress_callback: 
+                    if not partial_subs:
+                        progress_callback("Subtitle download limit (429). Retrying audio only...")
+                    else:
+                        progress_callback("Refining download...")
+
+                if not partial_subs:
+                    print(f"Subtitle download failed. Retrying audio only: {e}")
+                
                 time.sleep(1)
                 with yt_dlp.YoutubeDL(ydl_opts_no_subs) as ydl:
                     info_dict = ydl.extract_info(url_or_query, download=True)
@@ -153,7 +166,12 @@ class SongProcessor:
         if progress_callback: progress_callback("Loading Demucs model...")
         model = get_model("htdemucs_ft")
         model.eval()
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        if torch.cuda.is_available():
+            device = "cuda"
+        elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            device = "mps"
+        else:
+            device = "cpu"
 
         if progress_callback: progress_callback(f"Separating stems on {device}...")
         wav, sr = torchaudio.load(input_path)

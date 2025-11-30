@@ -268,10 +268,11 @@ class Controller(QObject):
         self.show_message_signal.emit("Singing started!")
 
     def _update_playback_time(self):
-        current_time_sec = self.audio_player.stream.time / self.audio_player.sr if self.audio_player.stream else 0
+        # current_time_sec = self.audio_player.stream.time / self.audio_player.sr if self.audio_player.stream else 0
+        # effective_time = self.current_song_data["start_time"] + current_time_sec
         
-        # Adjust for start_time offset if playback started from non-zero
-        effective_time = self.current_song_data["start_time"] + current_time_sec
+        # Use the player's tracked time which accounts for start_time and frames played
+        effective_time = self.audio_player.get_current_time()
 
         self.update_playback_position_signal.emit(effective_time)
 

@@ -383,6 +383,10 @@ class AudioPlayer(QObject):
                 current_position_sec = (self.current_frame / self.sr) + self.start_time
                 self.position_changed.emit(current_position_sec)
 
+        self._start_stream_safe(callback)
+
+    def _start_stream_safe(self, callback):
+        # Try primary configuration
         try:
             self.stream = sd.OutputStream(
                 samplerate=self.sr,
@@ -393,8 +397,38 @@ class AudioPlayer(QObject):
                 blocksize=self.block_size
             )
             self.stream.start()
+            return
         except Exception as e:
-            print(f"Playback stream error: {e}")
+            print(f"Playback stream error at {self.sr}Hz: {e}")
+        
+        # Fallback Strategy
+        fallback_sr = 48000 if self.sr == 44100 else 44100
+        print(f"Attempting fallback to {fallback_sr}Hz...")
+        
+        try:
+            # Resample playback data
+            if self.playback_data.ndim > 1:
+                resampled = librosa.resample(self.playback_data.T, orig_sr=self.sr, target_sr=fallback_sr).T
+            else:
+                resampled = librosa.resample(self.playback_data, orig_sr=self.sr, target_sr=fallback_sr)
+            
+            self.playback_data = resampled.astype(np.float32)
+            self.sr = fallback_sr
+            
+            # Reset stream with new SR
+            self.stream = sd.OutputStream(
+                samplerate=self.sr,
+                channels=2,
+                dtype='float32',
+                callback=callback,
+                finished_callback=self._on_stream_finished,
+                blocksize=self.block_size
+            )
+            self.stream.start()
+            print(f"Fallback successful at {self.sr}Hz")
+
+        except Exception as e:
+            print(f"Playback stream fallback failed: {e}")
             self.playing = False
             self.playback_failed.emit(str(e))
 
@@ -412,5 +446,10 @@ class AudioPlayer(QObject):
     def is_playing(self):
         return self.playing
     
+    def get_current_time(self):
+        if not self.playing:
+            return 0.0
+        return self.start_time + (self.current_frame / self.sr)
+
     def get_duration(self):
         return self.duration
