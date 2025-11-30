@@ -15,15 +15,15 @@ class NicknameDialog(QDialog):
 
     def __init__(self, current_nickname=None, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Set Your Nickname")
+        self.setWindowTitle("닉네임 설정")
         self.setFixedSize(300, 150)
         layout = QVBoxLayout(self)
-        self.label = QLabel("Please enter your nickname:")
+        self.label = QLabel("닉네임을 입력해 주세요:")
         self.nickname_input = QLineEdit()
         if current_nickname:
             self.nickname_input.setText(current_nickname)
-        self.nickname_input.setPlaceholderText("Enter nickname")
-        self.ok_button = QPushButton("OK")
+        self.nickname_input.setPlaceholderText("닉네임 입력")
+        self.ok_button = QPushButton("확인")
         self.ok_button.clicked.connect(self._accept_nickname)
         layout.addWidget(self.label)
         layout.addWidget(self.nickname_input)
@@ -36,20 +36,20 @@ class NicknameDialog(QDialog):
             self.nickname_set.emit(nickname)
             self.accept()
         else:
-            QMessageBox.warning(self, "Input Error", "Nickname cannot be empty.")
+            QMessageBox.warning(self, "입력 오류", "닉네임은 비워둘 수 없습니다.")
 
 class AddSongDialog(QDialog):
     song_add_requested = Signal(str, str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Add Song from YouTube")
+        self.setWindowTitle("YouTube에서 노래 추가")
         self.setFixedSize(500, 200)
         layout = QVBoxLayout(self)
-        self.url_label = QLabel("YouTube URL or Search Query:")
+        self.url_label = QLabel("YouTube URL 또는 검색어:")
         self.url_input = QLineEdit()
-        self.url_input.setPlaceholderText("Paste YouTube URL or type song title + artist")
-        self.add_button = QPushButton("Add Song")
+        self.url_input.setPlaceholderText("YouTube URL을 붙여넣거나 노래 제목 + 가수 입력")
+        self.add_button = QPushButton("노래 추가")
         self.add_button.clicked.connect(self._add_song)
         layout.addWidget(self.url_label)
         layout.addWidget(self.url_input)
@@ -59,7 +59,7 @@ class AddSongDialog(QDialog):
     def _add_song(self):
         input_text = self.url_input.text().strip()
         if not input_text:
-            QMessageBox.warning(self, "Input Error", "Please enter a YouTube URL or search query.")
+            QMessageBox.warning(self, "입력 오류", "YouTube URL 또는 검색어를 입력해 주세요.")
             return
         if "youtube.com/watch" in input_text or "youtu.be/" in input_text:
             url_or_query = input_text
@@ -77,12 +77,12 @@ class SongListWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.layout = QVBoxLayout(self)
-        self.add_song_button = QPushButton("Add Song from YouTube")
+        self.add_song_button = QPushButton("YouTube에서 노래 추가")
         self.add_song_button.clicked.connect(self.add_song_requested.emit)
         self.layout.addWidget(self.add_song_button)
         self.song_table = QTableWidget()
         self.song_table.setColumnCount(4)
-        self.song_table.setHorizontalHeaderLabels(["Title", "Artist", "Duration", "Action"])
+        self.song_table.setHorizontalHeaderLabels(["제목", "가수", "길이", "액션"])
         self.song_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.song_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.song_table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -92,13 +92,13 @@ class SongListWidget(QWidget):
     def update_song_list(self, songs):
         self.song_table.setRowCount(len(songs))
         for i, song in enumerate(songs):
-            self.song_table.setItem(i, 0, QTableWidgetItem(song.get("title", "Unknown Title")))
-            self.song_table.setItem(i, 1, QTableWidgetItem(song.get("artist", "Unknown Artist")))
+            self.song_table.setItem(i, 0, QTableWidgetItem(song.get("title", "알 수 없는 제목")))
+            self.song_table.setItem(i, 1, QTableWidgetItem(song.get("artist", "알 수 없는 가수")))
             duration_sec = song.get("duration", 0)
             mins = int(duration_sec // 60)
             secs = int(duration_sec % 60)
             self.song_table.setItem(i, 2, QTableWidgetItem(f"{mins:02}:{secs:02}"))
-            sing_button = QPushButton("Sing")
+            sing_button = QPushButton("부르기")
             sing_button.setProperty("song_id", song.get("id"))
             sing_button.clicked.connect(lambda checked=False, s_id=song.get("id"): self.start_singing_requested.emit(s_id))
             self.song_table.setCellWidget(i, 3, sing_button)
@@ -112,7 +112,7 @@ class SingingWidget(QWidget):
         self.layout = QVBoxLayout(self)
         self.setContentsMargins(20, 20, 20, 20)
         self.score_bar_layout = QHBoxLayout()
-        self.current_score_label = QLabel("Score: 0")
+        self.current_score_label = QLabel("점수: 0")
         self.current_score_label.setObjectName("ScoreLabel")
         self.current_score_label.setAlignment(Qt.AlignCenter)
         self.current_score_label.setFont(QFont("Arial", 24))
@@ -120,7 +120,7 @@ class SingingWidget(QWidget):
         self.layout.addLayout(self.score_bar_layout)
         self.pitch_lane = PitchVisualizationWidget()
         self.layout.addWidget(self.pitch_lane)
-        self.lyrics_label = QLabel("Ready to sing...")
+        self.lyrics_label = QLabel("노래할 준비 완료...")
         self.lyrics_label.setObjectName("LyricsLabel")
         self.lyrics_label.setAlignment(Qt.AlignCenter)
         self.lyrics_label.setFont(QFont("Arial", 28, QFont.Bold))
@@ -131,7 +131,7 @@ class SingingWidget(QWidget):
         self.progress_bar.setRange(0, 1000)
         self.progress_bar.setTextVisible(False)
         self.progress_layout.addWidget(self.progress_bar)
-        self.stop_button = QPushButton("Stop Singing")
+        self.stop_button = QPushButton("노래 중지")
         self.stop_button.setCursor(Qt.PointingHandCursor)
         self.stop_button.clicked.connect(self.stop_singing_requested.emit)
         self.progress_layout.addWidget(self.stop_button)
@@ -156,7 +156,7 @@ class SingingWidget(QWidget):
             pass
 
     def update_score(self, current_score):
-        self.current_score_label.setText(f"Score: {current_score:.0f}")
+        self.current_score_label.setText(f"점수: {current_score:.0f}")
 
 class PitchVisualizationWidget(QWidget):
 
@@ -285,45 +285,45 @@ class ResultsWidget(QWidget):
         self.setObjectName("ResultsWidget")
         self.layout = QVBoxLayout(self)
         self.setContentsMargins(20, 20, 20, 20)
-        self.title_label = QLabel("Singing Results")
+        self.title_label = QLabel("노래 결과")
         self.title_label.setAlignment(Qt.AlignCenter)
         self.title_label.setFont(QFont("Arial", 36))
         self.layout.addWidget(self.title_label)
-        self.score_label = QLabel("Final Score: --/100")
+        self.score_label = QLabel("최종 점수: --/100")
         self.score_label.setAlignment(Qt.AlignCenter)
         self.score_label.setFont(QFont("Arial", 48, QFont.Bold))
         self.layout.addWidget(self.score_label)
         self.subscores_layout = QHBoxLayout()
-        self.pitch_label = QLabel("Pitch: --%")
-        self.rhythm_label = QLabel("Rhythm: --%")
-        self.vibrato_label = QLabel("Vibrato: --%")
+        self.pitch_label = QLabel("음정: --%")
+        self.rhythm_label = QLabel("리듬: --%")
+        self.vibrato_label = QLabel("비브라토: --%")
         for label in [self.pitch_label, self.rhythm_label, self.vibrato_label]:
             label.setAlignment(Qt.AlignCenter)
             label.setFont(QFont("Arial", 20))
             self.subscores_layout.addWidget(label)
         self.layout.addLayout(self.subscores_layout)
-        self.feedback_label = QLabel("Feedback will appear here...")
+        self.feedback_label = QLabel("피드백이 여기에 표시됩니다...")
         self.feedback_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         self.feedback_label.setFont(QFont("Arial", 16))
         self.feedback_label.setWordWrap(True)
         self.layout.addWidget(self.feedback_label)
         self.ranking_table = QTableWidget()
         self.ranking_table.setColumnCount(3)
-        self.ranking_table.setHorizontalHeaderLabels(["Rank", "Nickname", "Score"])
+        self.ranking_table.setHorizontalHeaderLabels(["순위", "닉네임", "점수"])
         self.ranking_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.ranking_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.layout.addWidget(self.ranking_table)
-        self.back_button = QPushButton("Back to Home")
+        self.back_button = QPushButton("홈으로 돌아가기")
         self.back_button.clicked.connect(self.back_to_home_requested.emit)
         self.layout.addWidget(self.back_button)
         self.setLayout(self.layout)
 
     def display_results(self, final_score_data, feedback_messages, local_rankings, global_rankings=None):
-        self.score_label.setText(f"Final Score: {final_score_data['final_score']:.2f}/100")
-        self.pitch_label.setText(f"Pitch: {final_score_data['pitch_accuracy']:.1f}%")
-        self.rhythm_label.setText(f"Rhythm: {final_score_data['rhythm_accuracy']:.1f}%")
-        self.vibrato_label.setText(f"Vibrato: {final_score_data['vibrato_quality']:.1f}%")
-        self.feedback_label.setText("<b>Feedback:</b><br>" + "<br>".join(feedback_messages))
+        self.score_label.setText(f"최종 점수: {final_score_data['final_score']:.2f}/100")
+        self.pitch_label.setText(f"음정: {final_score_data['pitch_accuracy']:.1f}%")
+        self.rhythm_label.setText(f"리듬: {final_score_data['rhythm_accuracy']:.1f}%")
+        self.vibrato_label.setText(f"비브라토: {final_score_data['vibrato_quality']:.1f}%")
+        self.feedback_label.setText("<b>피드백:</b><br>" + "<br>".join(feedback_messages))
         all_rankings = sorted(local_rankings + (global_rankings if global_rankings else []), key=lambda x: x['score'], reverse=True)
         self.ranking_table.setRowCount(len(all_rankings))
         for i, rank_entry in enumerate(all_rankings):

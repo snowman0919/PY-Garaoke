@@ -65,10 +65,10 @@ class Controller(QObject):
         self.realtime_pitch_detector.volume_detected.connect(lambda vol: None)
         self.update_song_list_signal.connect(self.main_window.song_list_widget.update_song_list)
         self.show_message_signal.connect(lambda msg: self.main_window.statusBar().showMessage(msg, 3000))
-        self.show_error_signal.connect(lambda msg: QMessageBox.critical(self.main_window, "Error", msg))
+        self.show_error_signal.connect(lambda msg: QMessageBox.critical(self.main_window, "오류", msg))
         self.show_nickname_dialog_signal.connect(self._prompt_for_nickname)
-        self.song_download_progress_signal.connect(lambda msg: self.main_window.statusBar().showMessage(f"Download: {msg}", 0))
-        self.stem_separation_progress_signal.connect(lambda msg: self.main_window.statusBar().showMessage(f"Stem Separation: {msg}", 0))
+        self.song_download_progress_signal.connect(lambda msg: self.main_window.statusBar().showMessage(f"다운로드: {msg}", 0))
+        self.stem_separation_progress_signal.connect(lambda msg: self.main_window.statusBar().showMessage(f"음원 분리: {msg}", 0))
         self.start_singing_ui_signal.connect(self.main_window.show_singing_screen)
         self.song_metadata_updated_signal.connect(self.update_song_list)
         self.show_results_signal.connect(self.main_window.results_widget.display_results)
@@ -100,7 +100,7 @@ class Controller(QObject):
         config["nickname"] = nickname
         config["first_run"] = False
         self.storage.save_config(config)
-        self.show_message_signal.emit(f"Nickname set to: {nickname}")
+        self.show_message_signal.emit(f"닉네임 설정 완료: {nickname}")
         self.main_window.show_song_list()
 
     def update_song_list(self, song_id=None):
@@ -110,43 +110,62 @@ class Controller(QObject):
     def show_add_song_dialog(self):
         self.main_window.add_song_dialog.open()
 
-    def add_song_from_youtube(self, url_or_query, song_title_hint):
-        self.show_message_signal.emit(f"Adding song: {url_or_query}...")
-        thread_pool.submit(self._download_and_separate_song, url_or_query)
+        def add_song_from_youtube(self, url_or_query, song_title_hint):
 
-    def _download_and_separate_song(self, url_or_query):
+            self.show_message_signal.emit(f"노래 추가 중: {url_or_query}...")
 
-        def progress_cb(msg):
-            self.song_download_progress_signal.emit(msg)
-        try:
-            song_metadata = self.song_processor.process_song(
-                url_or_query,
-                progress_callback=progress_cb
-            )
-            self.all_songs.append(song_metadata)
-            self.storage.save_songs(self.all_songs)
-            self.update_song_list_signal.emit(self.all_songs)
-            self.show_message_signal.emit(f"Song '{song_metadata['title']}' added and processed!")
-        except Exception as e:
-            self.show_error_signal.emit(f"Error adding song: {e}")
-        finally:
-            self.song_download_progress_signal.emit("")
-            self.stem_separation_progress_signal.emit("")
+            thread_pool.submit(self._download_and_separate_song, url_or_query)
+
+    
+
+        def _download_and_separate_song(self, url_or_query):
+
+            def progress_cb(msg):
+
+                self.song_download_progress_signal.emit(msg)
+
+            try:
+
+                song_metadata = self.song_processor.process_song(
+
+                    url_or_query,
+
+                    progress_callback=progress_cb
+
+                )
+
+                self.all_songs.append(song_metadata)
+
+                self.storage.save_songs(self.all_songs)
+
+                self.update_song_list_signal.emit(self.all_songs)
+
+                self.show_message_signal.emit(f"노래 '{song_metadata['title']}'이(가) 추가 및 처리되었습니다!")
+
+            except Exception as e:
+
+                self.show_error_signal.emit(f"노래 추가 중 오류 발생: {e}")
+
+            finally:
+
+                self.song_download_progress_signal.emit("")
+
+                self.stem_separation_progress_signal.emit("")
 
     def prepare_singing(self, song_id):
         selected_song = next((s for s in self.all_songs if s["id"] == song_id), None)
         if not selected_song:
-            self.show_error_signal.emit("Selected song not found.")
+            self.show_error_signal.emit("선택한 노래를 찾을 수 없습니다.")
             return
         if not self.current_user_nickname:
             self._prompt_for_nickname(None)
             return
         self.current_song_data = selected_song
-        self.show_message_signal.emit(f"Preparing to sing '{selected_song['title']}'...")
+        self.show_message_signal.emit(f"'{selected_song['title']}' 노래 준비 중...")
         self.start_singing_ui_signal.emit(song_id)
         mr_path = selected_song["mr_path"]
         if not self.audio_player.load(mr_path):
-            self.show_error_signal.emit(f"Could not load instrumental track for {selected_song['title']}.")
+            self.show_error_signal.emit(f"{selected_song['title']}의 MR 트랙을 로드할 수 없습니다.")
             return
         lyrics_path = mr_path.replace("_mr.wav", ".lrc")
         self.current_song_lyrics = []
@@ -160,9 +179,9 @@ class Controller(QObject):
                 self.current_song_lyrics = []
         self.main_window.singing_widget.set_reference_pitch_contour([], selected_song["duration"])
         thread_pool.submit(self._extract_and_set_reference_pitch, selected_song)
-        self.show_message_signal.emit("Countdown: 3...")
-        QTimer.singleShot(1000, lambda: self.show_message_signal.emit("Countdown: 2..."))
-        QTimer.singleShot(2000, lambda: self.show_message_signal.emit("Countdown: 1..."))
+        self.show_message_signal.emit("카운트다운: 3...")
+        QTimer.singleShot(1000, lambda: self.show_message_signal.emit("카운트다운: 2..."))
+        QTimer.singleShot(2000, lambda: self.show_message_signal.emit("카운트다운: 1..."))
         QTimer.singleShot(3000, self._start_singing_after_countdown)
 
     def _parse_lyrics(self, raw_lines):
@@ -193,11 +212,11 @@ class Controller(QObject):
             f0_ref = np.nan_to_num(f0_ref, nan=0.0)
             self.update_reference_pitch_signal.emit(f0_ref.tolist(), song_data["duration"])
         except Exception as e:
-            self.show_error_signal.emit(f"Error extracting reference pitch for UI: {e}")
+            self.show_error_signal.emit(f"UI용 기준 음정 추출 중 오류 발생: {e}")
 
     def _start_singing_after_countdown(self):
         if not self.current_song_data or not self.current_user_nickname:
-            self.show_error_signal.emit("Cannot start singing: song data or nickname missing.")
+            self.show_error_signal.emit("노래를 시작할 수 없습니다: 노래 데이터 또는 닉네임 누락.")
             return
         take_filepath = self.storage.get_take_file_path(
             self.current_song_data["id"],
@@ -211,7 +230,7 @@ class Controller(QObject):
         )
         self.playback_timer.start(100)
         self.start_singing_time = time.time()
-        self.show_message_signal.emit("Singing started!")
+        self.show_message_signal.emit("노래 시작!")
 
     def _update_playback_time(self):
         effective_time = self.audio_player.get_current_time()
@@ -230,27 +249,27 @@ class Controller(QObject):
         self.audio_player.stop()
         self.audio_recorder.stop_recording()
         self.realtime_pitch_detector.stop()
-        self.show_message_signal.emit("Singing stopped. Processing results...")
+        self.show_message_signal.emit("노래 중지. 결과 처리 중...")
 
     def handle_singing_finished(self):
         self.stop_singing()
-        self.show_message_signal.emit("Song finished. Processing results...")
+        self.show_message_signal.emit("노래 종료. 결과 처리 중...")
 
     def handle_audio_error(self, error_msg):
-        self.show_error_signal.emit(f"Audio Error: {error_msg}\nPlease check your microphone/speaker settings.")
+        self.show_error_signal.emit(f"오디오 오류: {error_msg}\n마이크/스피커 설정을 확인해 주세요.")
         self.stop_singing()
         self.main_window.show_song_list()
 
     def process_recorded_take(self, recorded_take_filepath):
         if not recorded_take_filepath:
-            self.show_error_signal.emit("Recording failed or was empty. Please check your microphone settings.")
+            self.show_error_signal.emit("녹음 실패 또는 비어 있습니다. 마이크 설정을 확인해 주세요.")
             self.main_window.show_song_list()
             return
         if not self.current_song_data:
-            self.show_error_signal.emit("No current song data to process take.")
+            self.show_error_signal.emit("처리할 현재 노래 데이터가 없습니다.")
             self.main_window.show_song_list()
             return
-        self.show_message_signal.emit("Analyzing performance...")
+        self.show_message_signal.emit("성능 분석 중...")
         thread_pool.submit(self._analyze_and_display_results, recorded_take_filepath)
 
     def _analyze_and_display_results(self, recorded_take_filepath):
@@ -278,7 +297,7 @@ class Controller(QObject):
             self.show_results_signal.emit(score_data, feedback, local_rankings, global_rankings)
             self.main_window.show_results_screen()
         except Exception as e:
-            self.show_error_signal.emit(f"Error during performance analysis: {e}")
+            self.show_error_signal.emit(f"성능 분석 중 오류 발생: {e}")
             self.main_window.show_song_list()
 
     def _submit_score_to_server(self, score_data):
@@ -289,14 +308,14 @@ class Controller(QObject):
         try:
             response = requests.post(submit_endpoint, json=score_data, timeout=5)
             response.raise_for_status()
-            self.show_message_signal.emit("Score submitted to global ranking!")
+            self.show_message_signal.emit("점수가 글로벌 랭킹에 제출되었습니다!")
             top_scores_response = requests.get(top_scores_endpoint, params={"song_id": score_data["song_id"]}, timeout=5)
             top_scores_response.raise_for_status()
             global_rankings = top_scores_response.json()
         except requests.exceptions.ConnectionError:
-            self.show_error_signal.emit("Could not connect to ranking server.")
+            self.show_error_signal.emit("랭킹 서버에 연결할 수 없습니다.")
         except requests.exceptions.Timeout:
-            self.show_error_signal.emit("Ranking server timed out.")
+            self.show_error_signal.emit("랭킹 서버 응답 시간 초과.")
         except requests.exceptions.RequestException as e:
-            self.show_error_signal.emit(f"Error interacting with ranking server: {e}")
+            self.show_error_signal.emit(f"랭킹 서버와 통신 중 오류 발생: {e}")
         return global_rankings
