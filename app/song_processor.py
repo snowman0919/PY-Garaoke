@@ -55,7 +55,8 @@ class SongProcessor:
             raise e
 
     def _download_youtube(self, url_or_query, song_id, output_dir, progress_callback):
-        ydl_opts_base = {
+        # Combined Audio and Manual Subtitle Download Options
+        ydl_opts = {
             'format': 'bestaudio/best',
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
@@ -65,58 +66,43 @@ class SongProcessor:
             'postprocessor_args': ['-ac', '2'],
             'outtmpl': os.path.join(output_dir, f"{song_id}.%(ext)s"),
             'quiet': False,
-            'no_warnings': False,
+            'no_warnings': True,
             'noplaylist': True,
             'default_search': 'ytsearch',
+            
+            # Subtitle Options
+            'writesub': True,              # Download manual subtitles
+            'writeautomaticsub': False,    # NO auto-generated subtitles
+            'subtitleslangs': ['all'],     # Download all available manual languages to ensure we catch 'ko', 'ko-KR', etc.
         }
-        
-        ydl_opts_audio = ydl_opts_base.copy()
-        ydl_opts_audio.update({
-            'writesub': False,
-            'writeautomaticsub': False,
-        })
 
-        ydl_opts_manual_subs = ydl_opts_base.copy()
-        ydl_opts_manual_subs.update({
-            'writesub': True,
-            'writeautomaticsub': False, 
-            'subtitleslangs': ['all', '-live_chat'], 
-            'skip_download': True,
-        })
-
-        ydl_opts_no_subs = ydl_opts_audio.copy()
         if not url_or_query.startswith(("http://", "https://")):
             url_or_query = f"ytsearch1:{url_or_query}"
         
         info_dict = None
         
+        # Single Step: Download Audio AND Subtitles
         try:
-            with yt_dlp.YoutubeDL(ydl_opts_audio) as ydl:
+            if progress_callback: progress_callback("콘텐츠 다운로드 중 (오디오 및 자막)...")
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info_dict = ydl.extract_info(url_or_query, download=True)
         except yt_dlp.utils.DownloadError as e:
-            print(f"Audio download failed: {e}")
+            print(f"Download failed: {e}")
             raise e
 
-        try:
-            if progress_callback: progress_callback("수동 자막 검색 중...")
-            with yt_dlp.YoutubeDL(ydl_opts_manual_subs) as ydl:
-                ydl.extract_info(url_or_query, download=True)
-        except Exception as e:
-            print(f"Manual subtitle download error: {e}")
-
-        downloaded_subs = [f for f in os.listdir(output_dir) if f.startswith(song_id) and f.endswith('.vtt') and '.ko' in f]
-        
         if 'entries' in info_dict:
             if not info_dict['entries']: raise Exception("No search results found.")
             info_dict = info_dict['entries'][0]
         
         downloaded_file = os.path.join(output_dir, f"{song_id}.wav")
         if not os.path.exists(downloaded_file):
+            # Fallback: find whatever audio file was created and convert/rename
             files = os.listdir(output_dir)
             candidates = [f for f in files if f.startswith(song_id) and f.endswith('.wav')]
             if candidates:
                 os.rename(os.path.join(output_dir, candidates[0]), downloaded_file)
             else:
+                # Look for non-wav audio
                 candidates = [f for f in files if f.startswith(song_id) and os.path.splitext(f)[1] in ['.webm', '.m4a', '.mp3']]
                 if candidates:
                     src = os.path.join(output_dir, candidates[0])
@@ -124,12 +110,15 @@ class SongProcessor:
                 else:
                     raise FileNotFoundError(f"Downloaded audio not found for {song_id}")
         
+        # Cleanup temporary video files (but KEEP subtitles)
         for f in os.listdir(output_dir):
-            if f.startswith(song_id) and (f.endswith(".mhtml") or f.endswith(".webm")):
-                try:
-                    os.remove(os.path.join(output_dir, f))
-                except:
-                    pass
+            if f.startswith(song_id):
+                # Remove intermediate video files or metadata, but preserve .wav and subtitle files (.vtt, .srt)
+                if f.endswith((".mhtml", ".webm", ".mp4", ".json")): 
+                    try:
+                        os.remove(os.path.join(output_dir, f))
+                    except:
+                        pass
         return info_dict, downloaded_file
 
     def _separate_stems(self, input_path, mr_path, sr_path, title, progress_callback):
@@ -170,47 +159,21 @@ class SongProcessor:
             AudioSegment.silent(duration=10000).export(mr_path, format="wav")
 
     def _process_subtitles(self, output_dir, song_id, lrc_path):
-        all_ko_candidates = [f for f in os.listdir(output_dir) if f.startswith(song_id) and f.endswith(('.vtt', '.srt')) and '.ko' in f]
+        # Look for any subtitle file downloaded by yt-dlp containing 'ko'
+        # Matches: .ko.vtt, .ko-KR.vtt, .ko.srt, etc.
+        candidates = []
+        for f in os.listdir(output_dir):
+            if f.startswith(song_id) and f.endswith(('.vtt', '.srt')):
+                # Check if 'ko' is in the language part
+                if '.ko' in f or 'Korean' in f:
+                    candidates.append(f)
         
-        manual_subs_by_content = []
-        auto_subs_by_content = []
-
-        for candidate_file_name in all_ko_candidates:
-            full_path = os.path.join(output_dir, candidate_file_name)
-            if self._is_auto_subtitle_content(full_path):
-                auto_subs_by_content.append(candidate_file_name)
-            else:
-                manual_subs_by_content.append(candidate_file_name)
-
-        sub_file_to_use = None
-        
-        if manual_subs_by_content:
-            manual_subs_by_content.sort(key=len)
-            sub_file_to_use = manual_subs_by_content[0]
-
-        if not sub_file_to_use:
+        if not candidates:
             return
 
+        # If multiple (rare with specific yt-dlp opts), just pick the first one
+        sub_file_to_use = candidates[0]
         self._convert_subs_to_lrc(os.path.join(output_dir, sub_file_to_use), lrc_path)
-
-    def _is_auto_subtitle_content(self, file_path):
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read(4096)
-            
-            if re.search(r'<c(\.[^>]+)?>', content):
-                return True
-            
-            if re.search(r'position:\d+%|align:[a-z]+|line:\d+,\d+', content):
-                return True
-
-            if re.search(r'NOTE .*auto-generated', content, re.IGNORECASE):
-                return True
-            
-            return False
-        except Exception as e:
-            print(f"Error checking subtitle content for auto-detection in {file_path}: {e}")
-            return False
 
 
     def _convert_subs_to_lrc(self, sub_path, lrc_path):
