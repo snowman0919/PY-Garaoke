@@ -1,8 +1,8 @@
 PySide6>=6.6.1
 yt-dlp>=2025.01.01
 demucs-infer>=4.0.0
-torch>=2.2.0
-torchaudio>=2.2.0
+torch>=2.4.0
+torchaudio>=2.4.0
 sounddevice>=0.4.6
 numpy>=1.26.0
 librosa>=0.10.1
