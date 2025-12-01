@@ -160,7 +160,12 @@ class SongProcessor:
         else:
             device = "cpu"
         if progress_callback: progress_callback(f"Separating stems on {device}...")
-        wav, sr = torchaudio.load(input_path)
+        try:
+            wav, sr = torchaudio.load(input_path)
+        except Exception as e:
+            if "torchcodec" in str(e).lower():
+                raise ImportError("TorchCodec loading failed. Please uninstall it using 'pip uninstall torchcodec' and try again. We use SoundFile backend instead.") from e
+            raise e
         if wav.shape[0] == 1:
             wav = torch.cat([wav, wav], dim=0)
         elif wav.shape[0] > 2:
