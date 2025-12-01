@@ -208,7 +208,7 @@ class RealtimePitchDetector(QThread):
         super().__init__(parent)
         self.queue = queue.Queue()
         self.running = False
-        self.pitch_buffer = deque(maxlen=8)
+        self.pitch_buffer = deque(maxlen=18)
         self.silence_counter = 0
         self.engine = AudioInputEngine.instance()
         self.sr = _INPUT_SAMPLERATE
@@ -223,15 +223,11 @@ class RealtimePitchDetector(QThread):
                 audio_chunk = self.queue.get(timeout=1.0)
                 chunk_len = len(audio_chunk)
                 if chunk_len > self.window_size:
-                    # If chunk is huge (rare), just take the end
                     self.audio_buffer[:] = audio_chunk[-self.window_size:]
                 else:
-                    # Rolling buffer: shift left, append new
                     self.audio_buffer = np.roll(self.audio_buffer, -chunk_len)
                     self.audio_buffer[-chunk_len:] = audio_chunk
                 
-                # Analyze the full window (or part of it if we want to be safe against initial zeros, 
-                # but rolling buffer of zeros is fine)
                 self._analyze_chunk(self.audio_buffer, latest_chunk_rms=np.sqrt(np.mean(audio_chunk**2)))
             except queue.Empty:
                 continue
@@ -244,11 +240,10 @@ class RealtimePitchDetector(QThread):
             self.queue.put(indata[:, 0].copy())
 
     def _analyze_chunk(self, audio_window, latest_chunk_rms=None):
-        # Use latest chunk RMS for responsive volume check, if provided
         rms = latest_chunk_rms if latest_chunk_rms is not None else np.sqrt(np.mean(audio_window**2))
         self.volume_detected.emit(rms)
         
-        if rms < 0.008: # Adjusted from 0.002
+        if rms < 0.008:
             self.silence_counter += 1
             if self.silence_counter > 3:
                 self.pitch_detected.emit(0.0)
@@ -269,7 +264,7 @@ class RealtimePitchDetector(QThread):
             window = acorr[min_lag:max_lag]
             if len(window) > 0:
                 peak_idx = np.argmax(window) + min_lag
-                if acorr[peak_idx] > 0.25: # Adjusted from 0.2
+                if acorr[peak_idx] > 0.25:
                     pitch_found = True
                     if 0 < peak_idx < len(acorr) - 1:
                         alpha = acorr[peak_idx - 1]

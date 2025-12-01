@@ -191,15 +191,19 @@ class PitchVisualizationWidget(QWidget):
         self.update()
 
     def update_user_pitch(self, pitch_hz):
-        alpha = 0.6
+        alpha = 0.25
         if pitch_hz > 0:
             if self.smoothed_pitch <= 0:
                 self.smoothed_pitch = pitch_hz
             else:
-                if abs(pitch_hz - self.smoothed_pitch) > 50:
+                semitone_diff = abs(12 * np.log2(pitch_hz / self.smoothed_pitch))
+                if semitone_diff > 3.0:
                      self.smoothed_pitch = pitch_hz
                 else:
-                     self.smoothed_pitch = (self.smoothed_pitch * (1 - alpha)) + (pitch_hz * alpha)
+                     if abs(pitch_hz - self.smoothed_pitch) < 1.5:
+                         pass
+                     else:
+                         self.smoothed_pitch = (self.smoothed_pitch * (1 - alpha)) + (pitch_hz * alpha)
         else:
             self.smoothed_pitch = 0.0
         
