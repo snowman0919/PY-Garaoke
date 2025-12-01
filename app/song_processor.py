@@ -10,13 +10,22 @@ import numpy as np
 from pydub import AudioSegment
 from demucs_infer.pretrained import get_model
 from demucs_infer.apply import apply_model
-from demucs_infer.audio import save_audio
 
 class SongProcessor:
 
     def __init__(self, storage_manager, karaoke_scorer):
         self.storage = storage_manager
         self.scorer = karaoke_scorer
+
+    def _save_audio_sf(self, tensor, path, sr):
+        data = tensor.cpu().numpy().T
+
+        if data.ndim == 1:
+            data = np.stack((data, data), axis=-1)
+        elif data.shape[1] == 1:
+            data = np.concatenate((data, data), axis=1)
+
+        sf.write(path, data, sr)
 
     def process_song(self, url_or_query, progress_callback=None, error_callback=None):
         try:
@@ -188,12 +197,12 @@ class SongProcessor:
             else:
                 accompaniment_stems.append(source_tensor)
         if vocals_stem is not None:
-            save_audio(vocals_stem, sr_path, sr)
+            self._save_audio_sf(vocals_stem, sr_path, sr)
         else:
             AudioSegment.silent(duration=10000).export(sr_path, format="wav")
         if accompaniment_stems:
             mixed_mr = torch.sum(torch.stack(accompaniment_stems), dim=0)
-            save_audio(mixed_mr, mr_path, sr)
+            self._save_audio_sf(mixed_mr, mr_path, sr)
         else:
             AudioSegment.silent(duration=10000).export(mr_path, format="wav")
 
