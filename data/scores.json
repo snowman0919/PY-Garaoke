@@ -61,5 +61,23 @@
         "rhythm": 20.0,
         "vibrato": 16.32,
         "timestamp": "2025-12-01T14:23:10.541261"
+    },
+    {
+        "song_id": "faaa45f8-428b-4447-a817-da454f14c9d1",
+        "nickname": "에스티",
+        "score": 0.0,
+        "pitch": 0.0,
+        "rhythm": 0.0,
+        "vibrato": 0.0,
+        "timestamp": "2025-12-01T14:37:17.597885"
+    },
+    {
+        "song_id": "faaa45f8-428b-4447-a817-da454f14c9d1",
+        "nickname": "에스티",
+        "score": 7.12,
+        "pitch": 2.07,
+        "rhythm": 14.04,
+        "vibrato": 9.37,
+        "timestamp": "2025-12-01T14:39:20.730471"
     }
 ]
