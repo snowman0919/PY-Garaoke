@@ -43,25 +43,44 @@ class KaraokeScorer:
         quantized_midi = np.round(valid_midi)
         return quantized_midi
 
-    def _calculate_pitch_accuracy(self, user_f0, ref_f0, tolerance_cents=30):
+    def _calculate_pitch_accuracy(self, user_f0, ref_f0, tolerance_cents=50):
         min_len = min(len(user_f0), len(ref_f0))
         user_f0_trimmed = user_f0[:min_len]
         ref_f0_trimmed = ref_f0[:min_len]
-        valid_indices = ~np.isnan(ref_f0_trimmed) & (ref_f0_trimmed > 0)
-        if not np.any(valid_indices):
+
+        valid_indices = np.where(~np.isnan(ref_f0_trimmed) & (ref_f0_trimmed > 0))[0]
+        if len(valid_indices) == 0:
             return 0.0
-        user_f0_valid = user_f0_trimmed[valid_indices]
-        ref_f0_valid = ref_f0_trimmed[valid_indices]
-        if len(user_f0_valid) == 0:
-            return 0.0
-        with np.errstate(divide='ignore', invalid='ignore'):
-            cents_diff = 1200 * np.log2(user_f0_valid / ref_f0_valid)
-        cents_diff = np.abs(cents_diff)
-        perfect_hits = cents_diff < tolerance_cents
-        partial_hits = (cents_diff >= tolerance_cents) & (cents_diff < (tolerance_cents + 30))
-        score_sum = np.sum(perfect_hits) * 1.0 + np.sum(partial_hits) * 0.5
-        score = score_sum / len(user_f0_valid)
-        return score * 100
+
+        window_size = 5
+        
+        total_score = 0.0
+        valid_frame_count = 0
+
+        for idx in valid_indices:
+            ref_val = ref_f0_trimmed[idx]
+            
+            start_w = max(0, idx - window_size)
+            end_w = min(len(user_f0_trimmed), idx + window_size + 1)
+            
+            user_window = user_f0_trimmed[start_w:end_w]
+            
+            valid_user_window = user_window[~np.isnan(user_window) & (user_window > 0)]
+            
+            if len(valid_user_window) == 0:
+                continue
+            
+            with np.errstate(divide='ignore', invalid='ignore'):
+                cents_diffs = np.abs(1200 * np.log2(valid_user_window / ref_val))
+            
+            min_diff = np.min(cents_diffs)
+            
+            if min_diff < tolerance_cents:
+                total_score += 1.0
+            elif min_diff < (tolerance_cents + 50):
+                total_score += 0.5
+            
+        return (total_score / len(valid_indices)) * 100
 
     def _calculate_rhythm_accuracy(self, user_y, user_sr, ref_y, ref_sr, tolerance_frames=3):
         user_onsets = librosa.onset.onset_detect(y=user_y, sr=user_sr, hop_length=self.hop_length)
@@ -83,27 +102,70 @@ class KaraokeScorer:
         score = (matched_onsets / len(ref_onset_frames)) if len(ref_onset_frames) > 0 else 0
         return score * 100
 
-    def _calculate_vibrato_quality(self, user_f0, ref_f0, min_vibrato_hz=2, max_vibrato_hz=7, min_duration_sec=0.2):
-        ref_f0_clean = ref_f0[~np.isnan(ref_f0) & (ref_f0 > 0)]
-        user_f0_clean = user_f0[~np.isnan(user_f0) & (user_f0 > 0)]
+    def _calculate_vibrato_quality(self, user_f0, ref_f0, min_vibrato_hz=2, max_vibrato_hz=8, min_duration_sec=0.3):
+        ref_valid_mask = ~np.isnan(ref_f0) & (ref_f0 > 0)
+        if not np.any(ref_valid_mask):
+            return 0.0
+
         min_frames = int(self.sr * min_duration_sec / self.hop_length)
-        if len(ref_f0_clean) < min_frames:
-             return 50.0
-        ref_f0_diff = np.diff(ref_f0_clean)
-        stable_segments = np.where(np.abs(ref_f0_diff) < 5)[0]
-        if len(stable_segments) == 0:
-            return 50.0
-        num_segments_to_check = 5
-        segment_scores = []
-        idxs = np.linspace(0, len(stable_segments) - min_frames - 1, num_segments_to_check, dtype=int)
-        for start_idx in idxs:
-            if start_idx < 0 or start_idx >= len(ref_f0_clean): continue
-            real_start_idx = stable_segments[start_idx]
-            end_idx = real_start_idx + min_frames
-            if end_idx >= len(ref_f0_clean) or end_idx >= len(user_f0_clean):
+        
+        segments = []
+        current_segment = []
+        
+        for i, val in enumerate(ref_f0):
+            if np.isnan(val) or val <= 0:
+                if len(current_segment) >= min_frames:
+                    segments.append(current_segment)
+                current_segment = []
                 continue
-            user_segment = user_f0_clean[real_start_idx:end_idx]
-            user_segment_std = np.std(user_segment)
+            
+            if current_segment:
+                prev_val = ref_f0[current_segment[-1]]
+                if abs(1200 * np.log2(val / prev_val)) > 50:
+                    if len(current_segment) >= min_frames:
+                        segments.append(current_segment)
+                    current_segment = []
+            
+            current_segment.append(i)
+            
+        if len(current_segment) >= min_frames:
+            segments.append(current_segment)
+
+        if not segments:
+            return 0.0
+
+        segment_scores = []
+        
+        for seg_indices in segments:
+            user_seg_vals = []
+            valid_count = 0
+            
+            for idx in seg_indices:
+                if idx < len(user_f0):
+                    u_val = user_f0[idx]
+                    if not np.isnan(u_val) and u_val > 0:
+                        user_seg_vals.append(u_val)
+                        valid_count += 1
+                    else:
+                        user_seg_vals.append(np.nan)
+                else:
+                    user_seg_vals.append(np.nan)
+            
+            if valid_count < (len(seg_indices) * 0.5):
+                segment_scores.append(0.0)
+                continue
+
+            valid_vals = [v for v in user_seg_vals if not np.isnan(v)]
+            if len(valid_vals) < 2:
+                segment_scores.append(0.0)
+                continue
+                
+            center = np.mean(valid_vals)
+            cents_deviation = 1200 * np.log2(np.array(valid_vals) / center)
+            std_dev_cents = np.std(cents_deviation)
+            
+            user_segment_std = np.std(valid_vals)
+
             if user_segment_std > min_vibrato_hz and user_segment_std < max_vibrato_hz:
                 segment_scores.append(100.0)
             elif user_segment_std >= max_vibrato_hz:
@@ -112,8 +174,10 @@ class KaraokeScorer:
                 segment_scores.append(70.0)
             else:
                 segment_scores.append(20.0)
+
         if not segment_scores:
-            return 50.0
+            return 0.0
+            
         return sum(segment_scores) / len(segment_scores)
 
     def score_performance(self, user_take_path, reference_sr_path, ref_pitch_cache_path=None):

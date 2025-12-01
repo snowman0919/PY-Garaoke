@@ -208,7 +208,7 @@ class Controller(QObject):
             start_sec=self.current_song_data["start_time"],
             end_sec=self.current_song_data["end_time"]
         )
-        self.playback_timer.start(100)
+        self.playback_timer.start(30)
         self.start_singing_time = time.time()
         self.show_message_signal.emit("노래 시작!")
 

@@ -202,8 +202,12 @@ class PitchVisualizationWidget(QWidget):
                      self.smoothed_pitch = (self.smoothed_pitch * (1 - alpha)) + (pitch_hz * alpha)
         else:
             self.smoothed_pitch = 0.0
+        
         if self.smoothed_pitch > 0:
-            self.user_pitch_points.append((self.playback_cursor_time, self.smoothed_pitch))
+            latency_compensation = 0.04 
+            corrected_time = max(0, self.playback_cursor_time - latency_compensation)
+            self.user_pitch_points.append((corrected_time, self.smoothed_pitch))
+            
             min_time = self.playback_cursor_time - self.visible_window
             while self.user_pitch_points and self.user_pitch_points[0][0] < min_time:
                 self.user_pitch_points.pop(0)
