@@ -5,6 +5,8 @@ import re
 import yt_dlp
 import torch
 import torchaudio
+import soundfile as sf
+import numpy as np
 from pydub import AudioSegment
 from demucs_infer.pretrained import get_model
 from demucs_infer.apply import apply_model
@@ -161,14 +163,15 @@ class SongProcessor:
             device = "cpu"
         if progress_callback: progress_callback(f"Separating stems on {device}...")
         try:
-            wav, sr = torchaudio.load(input_path, backend="soundfile")
+            # Use soundfile directly to bypass torchaudio backend issues on Windows
+            data, sr = sf.read(input_path)
+            # soundfile returns (Time, Channels), we need (Channels, Time) for PyTorch
+            if data.ndim == 1:
+                data = data[:, np.newaxis]
+            data = data.T
+            wav = torch.from_numpy(data).float()
         except Exception as e:
-            error_msg = str(e).lower()
-            if "torchcodec" in error_msg:
-                raise ImportError(f"Audio loading failed (TorchCodec artifact?): {e}. Ensure 'soundfile' is installed and 'torchcodec' is fully removed.") from e
-            if "backend" in error_msg or "soundfile" in error_msg:
-                 raise ImportError(f"SoundFile backend failed to load: {e}. Please ensure 'soundfile' is installed (pip install soundfile numpy).") from e
-            raise e
+             raise ImportError(f"Audio loading failed with SoundFile: {e}. Ensure 'soundfile' is installed via 'pip install soundfile'.") from e
         if wav.shape[0] == 1:
             wav = torch.cat([wav, wav], dim=0)
         elif wav.shape[0] > 2:
