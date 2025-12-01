@@ -161,10 +161,13 @@ class SongProcessor:
             device = "cpu"
         if progress_callback: progress_callback(f"Separating stems on {device}...")
         try:
-            wav, sr = torchaudio.load(input_path)
+            wav, sr = torchaudio.load(input_path, backend="soundfile")
         except Exception as e:
-            if "torchcodec" in str(e).lower():
-                raise ImportError("TorchCodec loading failed. Please uninstall it using 'pip uninstall torchcodec' and try again. We use SoundFile backend instead.") from e
+            error_msg = str(e).lower()
+            if "torchcodec" in error_msg:
+                raise ImportError(f"Audio loading failed (TorchCodec artifact?): {e}. Ensure 'soundfile' is installed and 'torchcodec' is fully removed.") from e
+            if "backend" in error_msg or "soundfile" in error_msg:
+                 raise ImportError(f"SoundFile backend failed to load: {e}. Please ensure 'soundfile' is installed (pip install soundfile numpy).") from e
             raise e
         if wav.shape[0] == 1:
             wav = torch.cat([wav, wav], dim=0)
@@ -195,14 +198,12 @@ class SongProcessor:
         candidates = []
         for f in os.listdir(output_dir):
             if f.startswith(song_id) and f.endswith(('.vtt', '.srt')):
-                # Check if 'ko' is in the language part
                 if '.ko' in f or 'Korean' in f:
                     candidates.append(f)
         
         if not candidates:
             return
 
-        # If multiple (rare with specific yt-dlp opts), just pick the first one
         sub_file_to_use = candidates[0]
         self._convert_subs_to_lrc(os.path.join(output_dir, sub_file_to_use), lrc_path)
 
