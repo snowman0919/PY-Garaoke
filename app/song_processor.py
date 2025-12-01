@@ -172,9 +172,7 @@ class SongProcessor:
             device = "cpu"
         if progress_callback: progress_callback(f"Separating stems on {device}...")
         try:
-            # Use soundfile directly to bypass torchaudio backend issues on Windows
             data, sr = sf.read(input_path)
-            # soundfile returns (Time, Channels), we need (Channels, Time) for PyTorch
             if data.ndim == 1:
                 data = data[:, np.newaxis]
             data = data.T
