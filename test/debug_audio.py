@@ -12,12 +12,11 @@ try:
 except Exception as e:
     print(f"Could not list backends: {e}")
 
-# Create a dummy wav file for testing
 dummy_wav = "test_audio.wav"
 if not os.path.exists(dummy_wav):
     import numpy as np
     sr = 44100
-    data = np.random.uniform(-1, 1, sr) # 1 second noise
+    data = np.random.uniform(-1, 1, sr)
     soundfile.write(dummy_wav, data, sr)
     print(f"Created dummy wav: {dummy_wav}")
 

@@ -53,10 +53,6 @@ def initialize_audio_system():
 initialize_audio_system()
 
 class AudioInputEngine(QObject):
-    """
-    Singleton-like engine that manages a SINGLE input stream
-    and distributes data to registered consumers (recorder, pitch detector).
-    """
     _instance = None
     error_occurred = Signal(str)
 

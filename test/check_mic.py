@@ -13,16 +13,13 @@ def check_microphone():
         print(f"Default device info: {devices[default_input]['name']}")
 
     print("\nRecording 3 seconds of audio to check levels...")
-    duration = 3  # seconds
+    duration = 3
     fs = 44100
     
     try:
         myrecording = sd.rec(int(duration * fs), samplerate=fs, channels=1)
         for i in range(30):
             time.sleep(0.1)
-            # visual feedback of current volume
-            # We can't easily access current buffer in sd.rec without callback
-            # so we just wait.
         sd.wait()
         
         max_amp = np.max(np.abs(myrecording))
