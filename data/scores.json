@@ -7,5 +7,68 @@
         "rhythm": 6.86,
         "vibrato": 30.86,
         "timestamp": "2025-12-01T18:30:11.989611"
+    },
+    {
+        "song_id": "26685e63-622d-44fd-83de-01de2c8170b0",
+        "nickname": "집에가고싶",
+        "score": 25.64,
+        "pitch": 43.11,
+        "rhythm": 7.85,
+        "vibrato": 8.64,
+        "timestamp": "2025-12-03T12:49:06.939242"
+    },
+    {
+        "song_id": "26685e63-622d-44fd-83de-01de2c8170b0",
+        "nickname": "집에가고싶",
+        "score": 28.62,
+        "pitch": 43.11,
+        "rhythm": 17.8,
+        "vibrato": 8.64,
+        "timestamp": "2025-12-03T12:49:11.762169"
+    },
+    {
+        "song_id": "33747675-0d40-494b-881f-18a8050ca6ae",
+        "nickname": "집에가고싶",
+        "score": 12.96,
+        "pitch": 4.61,
+        "rhythm": 22.16,
+        "vibrato": 20.0,
+        "timestamp": "2025-12-03T12:49:29.744950"
+    },
+    {
+        "song_id": "33747675-0d40-494b-881f-18a8050ca6ae",
+        "nickname": "집에가고싶",
+        "score": 21.7,
+        "pitch": 25.03,
+        "rhythm": 15.14,
+        "vibrato": 23.22,
+        "timestamp": "2025-12-03T12:51:17.318869"
+    },
+    {
+        "song_id": "998031e4-6cfc-49b5-bb7a-3b02c57eb3ce",
+        "nickname": "집에가고싶",
+        "score": 45.89,
+        "pitch": 66.72,
+        "rhythm": 24.0,
+        "vibrato": 26.68,
+        "timestamp": "2025-12-03T12:53:33.153339"
+    },
+    {
+        "song_id": "33747675-0d40-494b-881f-18a8050ca6ae",
+        "nickname": "집에가고싶",
+        "score": 6.45,
+        "pitch": 1.53,
+        "rhythm": 11.35,
+        "vibrato": 11.38,
+        "timestamp": "2025-12-03T12:55:37.590952"
+    },
+    {
+        "song_id": "47e6e078-0524-430d-b894-52777e798908",
+        "nickname": "집에가고싶",
+        "score": 8.25,
+        "pitch": 12.82,
+        "rhythm": 2.8,
+        "vibrato": 5.02,
+        "timestamp": "2025-12-03T12:57:23.001243"
     }
 ]

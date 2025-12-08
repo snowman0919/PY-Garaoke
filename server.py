@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.orm import sessionmaker, declarative_base, Session
 from sqlalchemy.sql import func
 from datetime import datetime
 from typing import List, Optional
@@ -68,3 +68,12 @@ def submit_score(score_data: ScoreCreate, db: Session = Depends(get_db)):
 def get_top_scores(song_id: str, limit: int = 10, db: Session = Depends(get_db)):
     scores = db.query(DBScore).filter(DBScore.song_id == song_id).order_by(DBScore.score.desc()).limit(limit).all()
     return scores
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "server:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+    )
