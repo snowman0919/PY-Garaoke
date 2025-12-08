@@ -239,7 +239,7 @@ class RealtimePitchDetector(QThread):
         rms = latest_chunk_rms if latest_chunk_rms is not None else np.sqrt(np.mean(audio_window**2))
         self.volume_detected.emit(rms)
         
-        if rms < 0.008:
+        if rms < 0.015:
             self.silence_counter += 1
             if self.silence_counter > 3:
                 self.pitch_detected.emit(0.0)
@@ -260,7 +260,7 @@ class RealtimePitchDetector(QThread):
             window = acorr[min_lag:max_lag]
             if len(window) > 0:
                 peak_idx = np.argmax(window) + min_lag
-                if acorr[peak_idx] > 0.25:
+                if acorr[peak_idx] > 0.3:
                     pitch_found = True
                     if 0 < peak_idx < len(acorr) - 1:
                         alpha = acorr[peak_idx - 1]
